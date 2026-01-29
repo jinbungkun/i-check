@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-// 컴포넌트 불러오기
+import React, { useState, useEffect, useCallback } from 'react';
+// 컴포넌트 임포트
 import Attendance from './components/Attendance';
 import Search from './components/Search';
 import Schedule from './components/Schedule';
@@ -8,77 +8,96 @@ import CardChange from './components/CardChange';
 import Register from './components/Register';
 import Setting from './components/Setting';
 
-// API 및 초기화 함수 불러오기
-import { initializeAppData } from './api';
+// 유틸리티 및 테마
+import { requestGAS } from './utils/GoogleAppScript';
+import { filterEssentialData } from './utils/DataHelper'; 
 import { theme } from './theme';
-
-const styles = {
-  container: { minHeight: '100vh', fontFamily: "'Pretendard', sans-serif", backgroundColor: '#0a0a0a', color: '#ffffff', display: 'flex', flexDirection: 'column', padding: '20px', boxSizing: 'border-box' },
-  header: { backgroundColor: '#1a1a1a', borderRadius: '30px', padding: '10px 30px', marginBottom: '20px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', alignItems: 'center' },
-  logo: { fontSize: '18px', fontWeight: '700', margin: '15px 0', color: '#00d4ff' },
-  nav: { display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap', listStyle: 'none', padding: '0 0 10px 0', margin: 0 },
-  navItem: { padding: '10px 20px', cursor: 'pointer', fontSize: '14px', fontWeight: '600', borderRadius: '25px', color: '#aaaaaa', transition: 'all 0.3s ease' },
-  activeNavItem: { backgroundColor: '#ffffff', color: '#000000', transform: 'scale(1.05)' },
-  main: { flex: 1, backgroundColor: '#1a1a1a', borderRadius: '40px', padding: '20px', border: '1px solid #333', marginTop: '10px', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', width: '100%', boxSizing: 'border-box' },
-  loadingText: { color: '#888', textAlign: 'center', marginTop: '50px', fontSize: '16px' }
-};
+import { subscribeTestKey } from './utils/InputManager';
 
 function App() {
-  const [activeTab, setActiveTab] = useState('출석');
-  const [isDataLoaded, setIsDataLoaded] = useState(false); // 데이터 로딩 상태 관리
+  const [activeMenu, setActiveMenu] = useState('출석'); // Tab 대신 Menu라는 명칭 사용
+  const [isSyncing, setIsSyncing] = useState(true);    // 로딩 여부보다 '동기화 중'임을 명시
+  const [studentList, setStudentList] = useState([]); // 명확하게 '학생 명단'임을 표시
+  
+  const { app: styles } = theme;
+  const menuCategories = ['출석', '조회', '스케쥴', '포인트', '카드교체', '등록', '설정'];
 
-  // 1. 앱 시작 시 데이터 초기화 실행
-  useEffect(() => {
-    const init = async () => {
-      try {
-        console.log("I-Check 시스템 초기화 중...");
-        await initializeAppData(); // api.js에서 만든 초기화 함수 호출
-      } catch (error) {
-        console.error("데이터 초기화 실패:", error);
-      } finally {
-        setIsDataLoaded(true); // 성공하든 실패하든 로딩 상태는 종료
+  /**
+   * 🔄 서버와 학생 명단 동기화
+   */
+  const syncStudentData = useCallback(async () => {
+    console.log("🔄 서버 데이터 동기화 시도...");
+    setIsSyncing(true);
+
+    try {
+      const response = await requestGAS({ action: 'getStudents' });
+      
+      if (response.status === "success") {
+        const refinedData = filterEssentialData(response.data);
+        setStudentList(refinedData);
+        console.log("✅ 동기화 성공:", refinedData.length, "명");
       }
-    };
-    init();
+    } catch (error) {
+      console.error("❌ 데이터 동기화 에러:", error);
+      alert("서버 연결이 원활하지 않습니다. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setIsSyncing(false);
+    }
   }, []);
 
-  const categories = ['출석', '조회', '스케쥴', '포인트', '카드교체', '등록', '설정'];
+  /**
+   * ⌨️ 테스트용 단축키 설정 (F1)
+   */
+  useEffect(() => {
+    syncStudentData(); // 앱 시작 시 동기화 실행
+    const unsubscribe = subscribeTestKey();
+    return () => unsubscribe();
+  }, [syncStudentData]);
 
-  // 2. 선택된 탭에 따라 다른 컴포넌트를 보여주는 함수
-  const renderComponent = () => {
-    // 설정 탭은 데이터 로딩과 상관없이 항상 접근 가능해야 함 (URL 수정을 위해)
-    if (!isDataLoaded && activeTab !== '설정') {
-      return <div style={styles.loadingText}>학생 정보를 동기화하고 있습니다...</div>;
+  /**
+   * 🖼️ 현재 선택된 메뉴의 컴포넌트 렌더링
+   */
+  const renderContent = () => {
+    // 동기화 중일 때 화면 보호 (설정 메뉴 제외)
+    if (isSyncing && activeMenu !== '설정') {
+      return <div style={styles.loadingText}>최신 학생 정보를 가져오는 중입니다...</div>;
     }
 
-    switch (activeTab) {
-      case '출석': return <Attendance />;
-      case '조회': return <Search />;
-      case '스케쥴': return <Schedule />;
-      case '포인트': return <Points />;
-      case '카드교체': return <CardChange />;
-      case '등록': return <Register />;
-      case '설정': return <Setting />;
-      default: return <div>선택된 메뉴가 없습니다.</div>;
-    }
+    // 모든 자식 컴포넌트가 공유할 데이터와 제어 함수
+    const sharedProps = { 
+      students: studentList, 
+      setStudents: setStudentList 
+    };
+
+    const menuMap = {
+      '출석': <Attendance {...sharedProps} />,
+      '조회': <Search {...sharedProps} />,
+      '스케쥴': <Schedule {...sharedProps} />,
+      '포인트': <Points {...sharedProps} />,
+      '카드교체': <CardChange {...sharedProps} />,
+      '등록': <Register {...sharedProps} />,
+      '설정': <Setting />
+    };
+
+    return menuMap[activeMenu] || <div>선택된 메뉴가 없습니다.</div>;
   };
 
   return (
     <div style={styles.container}>
       <header style={styles.header}>
-        <div style={styles.logo}>I-Check(아이 체크)</div>
+        <div style={styles.logo}>I-Check</div>
         <nav>
           <ul style={styles.nav}>
-            {categories.map((item) => (
+            {menuCategories.map((menu) => (
               <li
-                key={item}
+                key={menu}
                 style={{
                   ...styles.navItem,
-                  ...(activeTab === item ? styles.activeNavItem : {})
+                  ...(activeMenu === menu ? styles.activeNavItem : {})
                 }}
-                onClick={() => setActiveTab(item)}
+                onClick={() => setActiveMenu(menu)}
               >
-                {item}
+                {menu}
               </li>
             ))}
           </ul>
@@ -86,7 +105,7 @@ function App() {
       </header>
 
       <main style={styles.main}>
-        {renderComponent()}
+        {renderContent()}
       </main>
     </div>
   );

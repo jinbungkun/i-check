@@ -7,7 +7,7 @@ function Setting() {
 
   // 1. 컴포넌트가 켜질 때 로컬스토리지에서 기존 주소 가져오기
   useEffect(() => {
-    const savedUrl = localStorage.getItem('i_check_gas_url');
+    const savedUrl = localStorage.getItem('gas_url');
     if (savedUrl) {
       setGasUrl(savedUrl);
     }
@@ -19,7 +19,7 @@ function Setting() {
       alert("GAS URL을 입력해주세요.");
       return;
     }
-    localStorage.setItem('i_check_gas_url', gasUrl);
+    localStorage.setItem('gas_url', gasUrl);
     setIsSaved(true);
     alert("이 기기에 설정이 저장되었습니다! ✅");
 
