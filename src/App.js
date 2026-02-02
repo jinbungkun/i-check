@@ -19,7 +19,7 @@ function App() {
   const [studentList, setStudentList] = useState([]); // 명확하게 '학생 명단'임을 표시
   
   const { app: styles } = theme;
-  const menuCategories = ['출석', '조회', '스케쥴', '포인트', '카드교체', '등록', '설정'];
+  const menuCategories = ['출석', '조회', '스케쥴', '포인트','등록', '설정'];
 
   /**
    * 🔄 서버와 학생 명단 동기화
