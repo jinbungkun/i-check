@@ -1,17 +1,15 @@
 // src/utils/DataHelper.js
 
-const REQUIRED_COLUMNS = ["ID", "이름", "생년월일","학부모 전화번호","수업스케줄","전화번호", "포인트", "상태", "마지막출석일"];
+const REQUIRED_COLUMNS = ["ID", "이름", "생년월일", "학부모전화번호", "본인전화번호", "수업스케줄", "포인트", "상태", "마지막출석일"];
 
 const forceExtractDate = (val) => {
   if (!val) return "";
   const str = String(val);
   const numbers = str.match(/\d+/g);
   if (!numbers || numbers.length < 3) return str;
-
   const y = numbers[0];
   const m = numbers[1].padStart(2, '0');
   const d = numbers[2].padStart(2, '0');
-
   return `${y}-${m}-${d}`;
 };
 
@@ -21,7 +19,7 @@ export const filterEssentialData = (rawData) => {
   return rawData.map((student) => {
     let filtered = {};
     REQUIRED_COLUMNS.forEach((col) => {
-      // 💡 시트의 키값에서 공백을 제거하고 REQUIRED_COLUMNS와 비교하여 데이터를 가져옵니다.
+      // 💡 시트의 헤더(key)에서 공백을 제거한 것이 필터의 이름(col)과 같으면 매칭!
       const actualKey = Object.keys(student).find(key => key.replace(/\s+/g, '') === col);
       let value = (actualKey && student[actualKey] !== undefined) ? student[actualKey] : "";
       
@@ -29,6 +27,7 @@ export const filterEssentialData = (rawData) => {
         value = forceExtractDate(value);
       }
       
+      // 이제 filtered["학부모전화번호"] 처럼 공백 없는 키에 값이 저장됩니다.
       filtered[col] = String(value);
     });
     return filtered;
