@@ -1,19 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { theme } from '../theme';
 import { requestGAS } from '../utils/GoogleAppScript';
 import { subscribeNFC } from '../utils/InputManager';
 
-function Register({ setStudents }) {
-  const [formData, setFormData] = useState({
-    이름: '',
-    ID: '',
-    수업스케줄: '',
-    본인전화번호: '',
-    학부모전화번호: '',
-    포인트: '0'
-  });
-
-  // 스케줄 선택을 위한 임시 상태
+function Register({ setStudents, headers = [] }) {
+  const [formData, setFormData] = useState({});
   const [selectedDay, setSelectedDay] = useState('');
   const [selectedTime, setSelectedTime] = useState('14:00');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -21,30 +11,41 @@ function Register({ setStudents }) {
 
   const days = ["월", "화", "수", "목", "금", "토", "일"];
 
-  // 폼 입력값 변경
+  // 💡 제외 항목 (포인트, 상태, 마지막 출석일)
+  const excludeFields = ['포인트', '상태', '마지막 출석일'];
+  
+  // 💡 엑셀 헤더와 100% 일치시켜 중복 방지
+  const manualFields = ['이름', 'ID', '수업 스케줄', '본인 전화번호', '학부모 전화번호', '생년월일'];
+
+  useEffect(() => {
+    if (headers.length > 0) {
+      const initialData = {};
+      headers.forEach(h => {
+        if (!excludeFields.includes(h)) {
+          initialData[h] = '';
+        }
+      });
+      setFormData(prev => ({ ...initialData, ...prev }));
+    }
+  }, [headers]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // 📅 스케줄 추가 로직 (버튼 클릭 시 형식에 맞춰 추가)
   const addSchedule = () => {
-    if (!selectedDay) {
-      alert("요일을 선택해주세요!");
-      return;
-    }
+    if (!selectedDay) { alert("요일을 선택해주세요!"); return; }
     const newSchedule = `${selectedDay}(${selectedTime})`;
-    const currentSchedules = formData.수업스케줄 ? formData.수업스케줄.split(', ') : [];
-    
-    if (currentSchedules.includes(newSchedule)) return; // 중복 방지
+    const currentSchedules = formData['수업 스케줄'] ? formData['수업 스케줄'].split(', ') : [];
+    if (currentSchedules.includes(newSchedule)) return;
 
     setFormData(prev => ({
       ...prev,
-      수업스케줄: [...currentSchedules, newSchedule].join(', ')
+      '수업 스케줄': [...currentSchedules, newSchedule].join(', ')
     }));
   };
 
-  // 💳 NFC 태그 시 ID만 조용히 입력 (알림 제거)
   const handleNFCTag = useCallback((scannedId) => {
     setFormData(prev => ({ ...prev, ID: scannedId }));
   }, []);
@@ -62,11 +63,26 @@ function Register({ setStudents }) {
     }
     setIsSubmitting(true);
     try {
-      const response = await requestGAS({ method: 'POST', action: 'registerStudent', studentData: formData });
+      // GAS 전송 시 공백 제거 처리
+      const studentDataForGAS = {};
+      Object.keys(formData).forEach(key => {
+        const cleanKey = key.replace(/\s+/g, "");
+        studentDataForGAS[cleanKey] = formData[key];
+      });
+
+      const response = await requestGAS({ 
+        method: 'POST', 
+        action: 'registerStudent', 
+        studentData: studentDataForGAS 
+      });
+      
       if (response.status === "success") {
         setStatus({ type: 'success', msg: `✅ ${formData.이름} 등록 완료!` });
         if (setStudents) setStudents(prev => [...prev, { ...formData, 마지막출석일: '' }]);
-        setFormData({ 이름: '', ID: '', 수업스케줄: '', 본인전화번호: '', 학부모전화번호: '', 포인트: '0' });
+        
+        const resetData = {};
+        headers.forEach(h => { if (!excludeFields.includes(h)) resetData[h] = ''; });
+        setFormData(resetData);
       }
     } catch (e) { setStatus({ type: 'error', msg: '❌ 에러 발생' }); }
     finally { setIsSubmitting(false); }
@@ -83,17 +99,18 @@ function Register({ setStudents }) {
 
         <form onSubmit={handleSubmit} style={formStyle}>
           <div style={inputGrid}>
+            {/* 기본 정보 */}
             <div style={inputGroup}>
               <label style={labelStyle}>학생 이름 *</label>
-              <input name="이름" value={formData.이름} onChange={handleChange} style={inputStyle} placeholder="이름 입력" />
+              <input name="이름" value={formData.이름 || ''} onChange={handleChange} style={inputStyle} placeholder="이름 입력" />
             </div>
             
             <div style={inputGroup}>
               <label style={labelStyle}>NFC ID (카드번호) *</label>
-              <input name="ID" value={formData.ID} onChange={handleChange} style={{...inputStyle, borderColor: formData.ID ? '#3b82f6' : '#3d414d'}} placeholder="카드를 찍어주세요" />
+              <input name="ID" value={formData.ID || ''} onChange={handleChange} style={{...inputStyle, borderColor: formData.ID ? '#3b82f6' : '#3d414d'}} placeholder="카드를 찍어주세요" />
             </div>
 
-            {/* 🕒 수업 스케줄 선택기 UI */}
+            {/* 수업 스케줄 (기존 UI 유지) */}
             <div style={{...inputGroup, gridColumn: 'span 2'}}>
               <label style={labelStyle}>수업 스케줄 설정</label>
               <div style={selectorContainer}>
@@ -109,30 +126,57 @@ function Register({ setStudents }) {
                 <input type="time" value={selectedTime} onChange={(e) => setSelectedTime(e.target.value)} style={timeInputStyle} />
                 <button type="button" onClick={addSchedule} style={addBtnStyle}>추가</button>
               </div>
-              
-              {/* 추가된 스케줄 확인란 */}
               <div style={scheduleResultTagBox}>
-                {formData.수업스케줄 ? formData.수업스케줄.split(', ').map((s, i) => (
+                {formData['수업 스케줄'] ? formData['수업 스케줄'].split(', ').map((s, i) => (
                   <span key={i} style={scheduleTag}>
-                    {s} 
-                    <span style={{marginLeft: '8px', cursor: 'pointer'}} onClick={() => {
-                      const filtered = formData.수업스케줄.split(', ').filter(item => item !== s).join(', ');
-                      setFormData(prev => ({...prev, 수업스케줄: filtered}));
+                    {s} <span style={{marginLeft: '8px', cursor: 'pointer'}} onClick={() => {
+                      const filtered = formData['수업 스케줄'].split(', ').filter(item => item !== s).join(', ');
+                      setFormData(prev => ({...prev, '수업 스케줄': filtered}));
                     }}>×</span>
                   </span>
-                )) : <span style={{color: '#555', fontSize: '13px'}}>등록된 스케줄이 없습니다. 요일과 시간을 선택 후 추가를 눌러주세요.</span>}
+                )) : <span style={{color: '#555', fontSize: '13px'}}>등록된 스케줄이 없습니다.</span>}
               </div>
             </div>
 
+            {/* 연락처 */}
             <div style={inputGroup}>
-              <label style={labelStyle}>본인 연락처</label>
-              <input name="본인전화번호" value={formData.본인전화번호} onChange={handleChange} style={inputStyle} placeholder="010-0000-0000" />
+              <label style={labelStyle}>본인 전화번호</label>
+              <input name="본인 전화번호" value={formData['본인 전화번호'] || ''} onChange={handleChange} style={inputStyle} placeholder="010-0000-0000" />
             </div>
 
             <div style={inputGroup}>
-              <label style={labelStyle}>학부모 연락처</label>
-              <input name="학부모전화번호" value={formData.학부모전화번호} onChange={handleChange} style={inputStyle} placeholder="010-0000-0000" />
+              <label style={labelStyle}>학부모 전화번호</label>
+              <input name="학부모 전화번호" value={formData['학부모 전화번호'] || ''} onChange={handleChange} style={inputStyle} placeholder="010-0000-0000" />
             </div>
+
+            {/* 📅 생년월일 날짜 선택기 (수정 포인트) */}
+            <div style={inputGroup}>
+              <label style={labelStyle}>생년월일</label>
+              <input 
+                type="date"
+                name="생년월일" 
+                value={formData.생년월일 || ''} 
+                onChange={handleChange} 
+                style={{...inputStyle, colorScheme: 'dark'}} 
+              />
+            </div>
+
+            {/* 자동 생성 섹션 (추가 카테고리) */}
+            {headers.map(header => {
+              if (excludeFields.includes(header) || manualFields.includes(header)) return null;
+              return (
+                <div key={header} style={inputGroup}>
+                  <label style={labelStyle}>{header}</label>
+                  <input 
+                    name={header} 
+                    value={formData[header] || ''} 
+                    onChange={handleChange} 
+                    style={inputStyle} 
+                    placeholder={`${header} 입력`} 
+                  />
+                </div>
+              );
+            })}
           </div>
 
           <button type="submit" disabled={isSubmitting} style={isSubmitting ? disabledBtn : submitBtn}>
@@ -144,7 +188,7 @@ function Register({ setStudents }) {
   );
 }
 
-// --- 추가/수정된 스타일 ---
+// 스타일 코드
 const selectorContainer = { display: 'flex', gap: '10px', alignItems: 'center', backgroundColor: '#1a1c23', padding: '15px', borderRadius: '12px', border: '1px solid #333' };
 const dayButtonGroup = { display: 'flex', gap: '5px' };
 const dayBtn = { padding: '8px 12px', borderRadius: '8px', border: '1px solid #3d414d', backgroundColor: '#24262d', color: '#999', cursor: 'pointer', fontWeight: 'bold' };
@@ -153,8 +197,6 @@ const timeInputStyle = { backgroundColor: '#24262d', border: '1px solid #3d414d'
 const addBtnStyle = { backgroundColor: '#fff', color: '#000', border: 'none', padding: '8px 15px', borderRadius: '8px', fontWeight: '800', cursor: 'pointer' };
 const scheduleResultTagBox = { display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '12px', minHeight: '30px' };
 const scheduleTag = { backgroundColor: '#3b82f622', color: '#3b82f6', border: '1px solid #3b82f6', padding: '5px 12px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold' };
-
-// (기존 스타일 유지)
 const containerStyle = { width: '100%', minHeight: '100vh', backgroundColor: '#1a1c23', padding: '40px 5%', display: 'flex', justifyContent: 'center' };
 const cardStyle = { width: '100%', maxWidth: '800px', backgroundColor: '#24262d', borderRadius: '24px', padding: '40px', border: '1px solid #333' };
 const headerStyle = { marginBottom: '30px', borderBottom: '1px solid #333', paddingBottom: '20px' };
