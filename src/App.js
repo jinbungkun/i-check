@@ -4,7 +4,6 @@ import Attendance from './components/Attendance';
 import Search from './components/Search';
 import Schedule from './components/Schedule';
 import Points from './components/Points';
-import CardChange from './components/CardChange';
 import Register from './components/Register';
 import Setting from './components/Setting';
 
@@ -74,7 +73,6 @@ function App() {
       '조회': <Search {...sharedProps} />,
       '스케쥴': <Schedule {...sharedProps} />,
       '포인트': <Points {...sharedProps} />,
-      '카드교체': <CardChange {...sharedProps} />,
       '등록': <Register {...sharedProps} />,
       '설정': <Setting />
     };
