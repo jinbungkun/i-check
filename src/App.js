@@ -13,56 +13,80 @@ import { filterEssentialData } from './utils/DataHelper';
 import { theme } from './theme';
 import { subscribeTestKey } from './utils/InputManager';
 
+/**
+ * 💡 하얀 테두리 박멸 및 글로벌 스타일 주입
+ * 브라우저 기본 마진을 0으로 만들고 가로 스크롤을 방지합니다.
+ */
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.innerHTML = `
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      margin: 0 !important; 
+      padding: 0 !important; 
+      background-color: #1a1c23; 
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    /* 스크롤바 숨기기 (선택사항) */
+    ::-webkit-scrollbar { display: none; }
+  `;
+  document.head.appendChild(style);
+}
+
 function App() {
   const [activeMenu, setActiveMenu] = useState('출석'); 
   const [isSyncing, setIsSyncing] = useState(true);     
   const [studentList, setStudentList] = useState([]); 
-  // 💡 추가: 모든 컴포넌트에서 공유할 시트 헤더 상태
   const [headers, setHeaders] = useState([]); 
   
+  // 📱 반응형 상태: 화면 폭 768px 미만일 때 모바일 모드
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
   const { app: styles } = theme;
   const menuCategories = ['출석', '조회', '스케쥴', '포인트', '등록', '설정'];
 
+  // 화면 크기 실시간 감지
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   /**
-   * 🔄 서버와 데이터(학생 명단 + 시트 헤더) 동기화
+   * 🔄 서버 데이터 동기화
    */
   const syncStudentData = useCallback(async () => {
-    console.log("🔄 서버 데이터 동기화 시도 (명단 & 헤더)...");
+    console.log("🔄 서버 데이터 동기화 시도...");
     setIsSyncing(true);
-
     try {
-      // 💡 최적화: 두 요청을 동시에 보내서 대기 시간을 절반으로 줄임
       const [studentRes, headerRes] = await Promise.all([
         requestGAS({ action: 'getStudents' }),
         requestGAS({ action: 'getHeaders' })
       ]);
       
-      // 1. 학생 명단 처리
       if (studentRes.status === "success") {
         const refinedData = filterEssentialData(studentRes.data);
         setStudentList(refinedData);
       }
 
-      // 2. 헤더 정보 처리 (배열 형태 예상)
       if (Array.isArray(headerRes)) {
         setHeaders(headerRes);
-        console.log("✅ 헤더 동기화 성공:", headerRes.length, "개 항목");
       } else if (headerRes && headerRes.data) {
         setHeaders(headerRes.data);
       }
-
-      console.log("✅ 전체 데이터 동기화 완료");
+      console.log("✅ 동기화 완료");
     } catch (error) {
-      console.error("❌ 데이터 동기화 에러:", error);
-      alert("서버 연결이 원활하지 않습니다. 인터넷 연결이나 GAS 배포 상태를 확인해주세요.");
+      console.error("❌ 동기화 에러:", error);
     } finally {
       setIsSyncing(false);
     }
   }, []);
 
-  /**
-   * ⌨️ 초기 실행 및 단축키 설정
-   */
   useEffect(() => {
     syncStudentData(); 
     const unsubscribe = subscribeTestKey();
@@ -70,24 +94,22 @@ function App() {
   }, [syncStudentData]);
 
   /**
-   * 🖼️ 메뉴에 따른 컨텐츠 렌더링
+   * 🖼️ 메인 컨텐츠 렌더링 함수
    */
   const renderContent = () => {
-    // 동기화 중일 때 로딩 화면 (설정 메뉴는 즉시 진입 허용)
     if (isSyncing && activeMenu !== '설정') {
       return (
-        <div style={styles.loadingContainer}>
-          <div className="spinner"></div>
-          <p style={styles.loadingText}>최신 정보를 서버와 동기화 중입니다...</p>
+        <div style={loadingContainerStyle}>
+          <div className="spinner" style={spinnerStyle}></div>
+          <p style={{marginTop: '15px', color: '#94a3b8', fontSize: '14px'}}>데이터를 동기화하고 있습니다...</p>
         </div>
       );
     }
 
-    // 자식 컴포넌트들과 공유할 속성들
     const sharedProps = { 
       students: studentList, 
       setStudents: setStudentList,
-      headers: headers // 💡 모든 자식에게 헤더 정보 공유 (필요한 곳에서 사용)
+      headers: headers 
     };
 
     const menuMap = {
@@ -95,7 +117,6 @@ function App() {
       '조회': <Search {...sharedProps} />,
       '스케쥴': <Schedule {...sharedProps} />,
       '포인트': <Points {...sharedProps} />,
-      // 💡 등록 페이지에서 headers를 사용하여 동적 UI 생성
       '등록': <Register {...sharedProps} />, 
       '설정': <Setting />
     };
@@ -104,19 +125,26 @@ function App() {
   };
 
   return (
-    <div style={styles.container}>
-      <header style={styles.header}>
-        <div style={styles.logo} onClick={() => window.location.reload()} title="새로고침">
-          I-Check
+    <div style={responsiveContainerStyle}>
+      {/* 📱 반응형 헤더 섹션 */}
+      <header style={responsiveHeaderStyle(isMobile)}>
+        <div style={headerTopStyle}>
+          <div style={logoStyle} onClick={() => window.location.reload()}>
+            I-Check
+          </div>
+          <div style={statusBadgeStyle(isSyncing)}>
+            {isSyncing ? '● 동기화중' : '● 연결됨'}
+          </div>
         </div>
-        <nav>
-          <ul style={styles.nav}>
+
+        <nav style={navWrapperStyle(isMobile)}>
+          <ul style={navStyle(isMobile)}>
             {menuCategories.map((menu) => (
               <li
                 key={menu}
                 style={{
-                  ...styles.navItem,
-                  ...(activeMenu === menu ? styles.activeNavItem : {})
+                  ...navItemStyle(isMobile),
+                  ...(activeMenu === menu ? activeNavItemStyle : {})
                 }}
                 onClick={() => setActiveMenu(menu)}
               >
@@ -125,17 +153,119 @@ function App() {
             ))}
           </ul>
         </nav>
-        {/* 우측 상단 동기화 상태 표시 (선택사항) */}
-        <div style={{fontSize: '12px', color: isSyncing ? '#3b82f6' : '#10b981'}}>
-          {isSyncing ? '● 동기화중' : '● 연결됨'}
-        </div>
       </header>
 
-      <main style={styles.main}>
+      {/* 메인 영역 */}
+      <main style={mainContentStyle(isMobile)}>
         {renderContent()}
       </main>
     </div>
   );
 }
+
+/** 🎨 CSS-in-JS 스타일 정의 **/
+
+const responsiveContainerStyle = {
+  minHeight: '100vh',
+  width: '100%',
+  backgroundColor: '#1a1c23',
+  display: 'flex',
+  flexDirection: 'column',
+};
+
+const responsiveHeaderStyle = (isMobile) => ({
+  backgroundColor: '#24262d',
+  padding: isMobile ? '15px 15px 0 15px' : '0 25px',
+  borderBottom: '1px solid #333',
+  display: 'flex',
+  flexDirection: isMobile ? 'column' : 'row',
+  alignItems: isMobile ? 'stretch' : 'center',
+  justifyContent: 'space-between',
+  position: 'sticky',
+  top: 0,
+  zIndex: 1000,
+});
+
+const headerTopStyle = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: '5px',
+};
+
+const logoStyle = {
+  fontSize: '22px',
+  fontWeight: '900',
+  color: '#3b82f6',
+  cursor: 'pointer',
+  letterSpacing: '-0.5px',
+  padding: '10px 0'
+};
+
+const navWrapperStyle = (isMobile) => ({
+  overflowX: isMobile ? 'auto' : 'visible',
+  WebkitOverflowScrolling: 'touch',
+  msOverflowStyle: 'none',
+  scrollbarWidth: 'none',
+});
+
+const navStyle = (isMobile) => ({
+  display: 'flex',
+  listStyle: 'none',
+  padding: 0,
+  margin: 0,
+  gap: isMobile ? '18px' : '30px',
+});
+
+const navItemStyle = (isMobile) => ({
+  padding: isMobile ? '12px 2px' : '22px 0',
+  color: '#94a3b8',
+  fontSize: isMobile ? '14px' : '15px',
+  fontWeight: '700',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+  borderBottom: '3px solid transparent',
+  transition: 'all 0.2s ease',
+});
+
+const activeNavItemStyle = {
+  color: '#fff',
+  borderBottom: '3px solid #3b82f6',
+};
+
+const statusBadgeStyle = (isSyncing) => ({
+  fontSize: '11px',
+  fontWeight: 'bold',
+  padding: '4px 10px',
+  borderRadius: '20px',
+  backgroundColor: isSyncing ? '#3b82f615' : '#10b98115',
+  color: isSyncing ? '#3b82f6' : '#10b981',
+  border: `1px solid ${isSyncing ? '#3b82f633' : '#10b98133'}`
+});
+
+const mainContentStyle = (isMobile) => ({
+  flex: 1,
+  padding: isMobile ? '15px' : '30px',
+  maxWidth: '1200px',
+  margin: '0 auto',
+  width: '100%',
+  boxSizing: 'border-box'
+});
+
+const loadingContainerStyle = {
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'center',
+  alignItems: 'center',
+  height: '60vh',
+};
+
+const spinnerStyle = {
+  width: '32px',
+  height: '32px',
+  border: '3px solid rgba(59, 130, 246, 0.1)',
+  borderTop: '3px solid #3b82f6',
+  borderRadius: '50%',
+};
 
 export default App;

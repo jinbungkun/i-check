@@ -9,21 +9,24 @@ function Register({ setStudents, headers = [] }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState({ type: '', msg: '' });
 
-  const days = ["월", "화", "수", "목", "금", "토", "일"];
+  // 📱 화면 너비 감지 (반응형 대응)
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
-  // 💡 제외 항목 (포인트, 상태, 마지막 출석일)
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const days = ["월", "화", "수", "목", "금", "토", "일"];
   const excludeFields = ['포인트', '상태', '마지막 출석일'];
-  
-  // 💡 엑셀 헤더와 100% 일치시켜 중복 방지
   const manualFields = ['이름', 'ID', '수업 스케줄', '본인 전화번호', '학부모 전화번호', '생년월일'];
 
   useEffect(() => {
     if (headers.length > 0) {
       const initialData = {};
       headers.forEach(h => {
-        if (!excludeFields.includes(h)) {
-          initialData[h] = '';
-        }
+        if (!excludeFields.includes(h)) initialData[h] = '';
       });
       setFormData(prev => ({ ...initialData, ...prev }));
     }
@@ -63,7 +66,6 @@ function Register({ setStudents, headers = [] }) {
     }
     setIsSubmitting(true);
     try {
-      // GAS 전송 시 공백 제거 처리
       const studentDataForGAS = {};
       Object.keys(formData).forEach(key => {
         const cleanKey = key.replace(/\s+/g, "");
@@ -79,7 +81,6 @@ function Register({ setStudents, headers = [] }) {
       if (response.status === "success") {
         setStatus({ type: 'success', msg: `✅ ${formData.이름} 등록 완료!` });
         if (setStudents) setStudents(prev => [...prev, { ...formData, 마지막출석일: '' }]);
-        
         const resetData = {};
         headers.forEach(h => { if (!excludeFields.includes(h)) resetData[h] = ''; });
         setFormData(resetData);
@@ -89,16 +90,16 @@ function Register({ setStudents, headers = [] }) {
   };
 
   return (
-    <div style={containerStyle}>
-      <div style={cardStyle}>
+    <div style={containerStyle(isMobile)}>
+      <div style={cardStyle(isMobile)}>
         <header style={headerStyle}>
-          <h2 style={titleStyle}>신규 학생 등록</h2>
+          <h2 style={titleStyle(isMobile)}>신규 학생 등록</h2>
         </header>
 
         {status.msg && <div style={statusBanner(status.type)}>{status.msg}</div>}
 
         <form onSubmit={handleSubmit} style={formStyle}>
-          <div style={inputGrid}>
+          <div style={inputGrid(isMobile)}>
             {/* 기본 정보 */}
             <div style={inputGroup}>
               <label style={labelStyle}>학생 이름 *</label>
@@ -110,21 +111,23 @@ function Register({ setStudents, headers = [] }) {
               <input name="ID" value={formData.ID || ''} onChange={handleChange} style={{...inputStyle, borderColor: formData.ID ? '#3b82f6' : '#3d414d'}} placeholder="카드를 찍어주세요" />
             </div>
 
-            {/* 수업 스케줄 (기존 UI 유지) */}
-            <div style={{...inputGroup, gridColumn: 'span 2'}}>
+            {/* 수업 스케줄 (반응형 레이아웃) */}
+            <div style={{...inputGroup, gridColumn: isMobile ? 'span 1' : 'span 2'}}>
               <label style={labelStyle}>수업 스케줄 설정</label>
-              <div style={selectorContainer}>
-                <div style={dayButtonGroup}>
+              <div style={selectorContainer(isMobile)}>
+                <div style={dayButtonGroup(isMobile)}>
                   {days.map(d => (
                     <button key={d} type="button" 
                       onClick={() => setSelectedDay(d)}
-                      style={selectedDay === d ? dayBtnActive : dayBtn}>
+                      style={selectedDay === d ? dayBtnActive : dayBtn(isMobile)}>
                       {d}
                     </button>
                   ))}
                 </div>
-                <input type="time" value={selectedTime} onChange={(e) => setSelectedTime(e.target.value)} style={timeInputStyle} />
-                <button type="button" onClick={addSchedule} style={addBtnStyle}>추가</button>
+                <div style={{display: 'flex', gap: '8px', width: '100%'}}>
+                   <input type="time" value={selectedTime} onChange={(e) => setSelectedTime(e.target.value)} style={{...timeInputStyle, flex: 1}} />
+                   <button type="button" onClick={addSchedule} style={addBtnStyle}>추가</button>
+                </div>
               </div>
               <div style={scheduleResultTagBox}>
                 {formData['수업 스케줄'] ? formData['수업 스케줄'].split(', ').map((s, i) => (
@@ -138,7 +141,6 @@ function Register({ setStudents, headers = [] }) {
               </div>
             </div>
 
-            {/* 연락처 */}
             <div style={inputGroup}>
               <label style={labelStyle}>본인 전화번호</label>
               <input name="본인 전화번호" value={formData['본인 전화번호'] || ''} onChange={handleChange} style={inputStyle} placeholder="010-0000-0000" />
@@ -149,31 +151,18 @@ function Register({ setStudents, headers = [] }) {
               <input name="학부모 전화번호" value={formData['학부모 전화번호'] || ''} onChange={handleChange} style={inputStyle} placeholder="010-0000-0000" />
             </div>
 
-            {/* 📅 생년월일 날짜 선택기 (수정 포인트) */}
             <div style={inputGroup}>
               <label style={labelStyle}>생년월일</label>
-              <input 
-                type="date"
-                name="생년월일" 
-                value={formData.생년월일 || ''} 
-                onChange={handleChange} 
-                style={{...inputStyle, colorScheme: 'dark'}} 
-              />
+              <input type="date" name="생년월일" value={formData.생년월일 || ''} onChange={handleChange} style={{...inputStyle, colorScheme: 'dark'}} />
             </div>
 
-            {/* 자동 생성 섹션 (추가 카테고리) */}
+            {/* 자동 생성 섹션 */}
             {headers.map(header => {
               if (excludeFields.includes(header) || manualFields.includes(header)) return null;
               return (
                 <div key={header} style={inputGroup}>
                   <label style={labelStyle}>{header}</label>
-                  <input 
-                    name={header} 
-                    value={formData[header] || ''} 
-                    onChange={handleChange} 
-                    style={inputStyle} 
-                    placeholder={`${header} 입력`} 
-                  />
+                  <input name={header} value={formData[header] || ''} onChange={handleChange} style={inputStyle} placeholder={`${header} 입력`} />
                 </div>
               );
             })}
@@ -188,26 +177,27 @@ function Register({ setStudents, headers = [] }) {
   );
 }
 
-// 스타일 코드
-const selectorContainer = { display: 'flex', gap: '10px', alignItems: 'center', backgroundColor: '#1a1c23', padding: '15px', borderRadius: '12px', border: '1px solid #333' };
-const dayButtonGroup = { display: 'flex', gap: '5px' };
-const dayBtn = { padding: '8px 12px', borderRadius: '8px', border: '1px solid #3d414d', backgroundColor: '#24262d', color: '#999', cursor: 'pointer', fontWeight: 'bold' };
-const dayBtnActive = { ...dayBtn, backgroundColor: '#3b82f6', color: '#fff', borderColor: '#3b82f6' };
-const timeInputStyle = { backgroundColor: '#24262d', border: '1px solid #3d414d', color: '#fff', padding: '7px', borderRadius: '8px', outline: 'none' };
-const addBtnStyle = { backgroundColor: '#fff', color: '#000', border: 'none', padding: '8px 15px', borderRadius: '8px', fontWeight: '800', cursor: 'pointer' };
-const scheduleResultTagBox = { display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '12px', minHeight: '30px' };
-const scheduleTag = { backgroundColor: '#3b82f622', color: '#3b82f6', border: '1px solid #3b82f6', padding: '5px 12px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold' };
-const containerStyle = { width: '100%', minHeight: '100vh', backgroundColor: '#1a1c23', padding: '40px 5%', display: 'flex', justifyContent: 'center' };
-const cardStyle = { width: '100%', maxWidth: '800px', backgroundColor: '#24262d', borderRadius: '24px', padding: '40px', border: '1px solid #333' };
-const headerStyle = { marginBottom: '30px', borderBottom: '1px solid #333', paddingBottom: '20px' };
-const titleStyle = { fontSize: '24px', fontWeight: '800', color: '#fff', margin: 0 };
-const statusBanner = (type) => ({ padding: '15px', borderRadius: '10px', marginBottom: '20px', backgroundColor: type === 'success' ? '#1e293b' : '#442727', color: type === 'success' ? '#3b82f6' : '#ff4d4f', border: `1px solid ${type === 'success' ? '#3b82f6' : '#ff4d4f'}` });
-const formStyle = { display: 'flex', flexDirection: 'column', gap: '25px' };
-const inputGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' };
+// 🎨 반응형 디자인 스타일
+const containerStyle = (isMobile) => ({ width: '100%', minHeight: '100vh', backgroundColor: '#1a1c23', padding: isMobile ? '10px' : '40px 5%', display: 'flex', justifyContent: 'center', boxSizing: 'border-box' });
+const cardStyle = (isMobile) => ({ width: '100%', maxWidth: '800px', backgroundColor: '#24262d', borderRadius: isMobile ? '16px' : '24px', padding: isMobile ? '20px' : '40px', border: '1px solid #333', boxSizing: 'border-box' });
+const titleStyle = (isMobile) => ({ fontSize: isMobile ? '20px' : '24px', fontWeight: '800', color: '#fff', margin: 0 });
+const inputGrid = (isMobile) => ({ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? '15px' : '20px' });
+const selectorContainer = (isMobile) => ({ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '10px', alignItems: isMobile ? 'stretch' : 'center', backgroundColor: '#1a1c23', padding: '12px', borderRadius: '12px', border: '1px solid #333' });
+const dayButtonGroup = (isMobile) => ({ display: 'flex', gap: '4px', justifyContent: 'space-between', flexWrap: isMobile ? 'wrap' : 'nowrap' });
+const dayBtn = (isMobile) => ({ flex: 1, minWidth: isMobile ? '40px' : 'auto', padding: '8px', borderRadius: '8px', border: '1px solid #3d414d', backgroundColor: '#24262d', color: '#999', cursor: 'pointer', fontWeight: 'bold', fontSize: isMobile ? '12px' : '14px' });
+const dayBtnActive = { ...dayBtn(false), backgroundColor: '#3b82f6', color: '#fff', borderColor: '#3b82f6', flex: 1 };
+
+const headerStyle = { marginBottom: '25px', borderBottom: '1px solid #333', paddingBottom: '15px' };
+const statusBanner = (type) => ({ padding: '15px', borderRadius: '10px', marginBottom: '20px', backgroundColor: type === 'success' ? '#1e293b' : '#442727', color: type === 'success' ? '#3b82f6' : '#ff4d4f', border: `1px solid ${type === 'success' ? '#3b82f6' : '#ff4d4f'}`, fontSize: '14px' });
+const formStyle = { display: 'flex', flexDirection: 'column', gap: '20px' };
 const inputGroup = { display: 'flex', flexDirection: 'column', gap: '8px' };
 const labelStyle = { fontSize: '13px', fontWeight: '700', color: '#3b82f6' };
-const inputStyle = { backgroundColor: '#1a1c23', border: '1px solid #3d414d', borderRadius: '10px', padding: '12px', color: '#fff', outline: 'none' };
-const submitBtn = { backgroundColor: '#3b82f6', color: '#fff', border: 'none', borderRadius: '12px', padding: '15px', fontSize: '16px', fontWeight: '800', cursor: 'pointer', marginTop: '10px' };
+const inputStyle = { backgroundColor: '#1a1c23', border: '1px solid #3d414d', borderRadius: '10px', padding: '14px', color: '#fff', outline: 'none', fontSize: '16px' };
+const timeInputStyle = { backgroundColor: '#24262d', border: '1px solid #3d414d', color: '#fff', padding: '10px', borderRadius: '8px', outline: 'none' };
+const addBtnStyle = { backgroundColor: '#fff', color: '#000', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: '800', cursor: 'pointer' };
+const scheduleResultTagBox = { display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '10px' };
+const scheduleTag = { backgroundColor: '#3b82f622', color: '#3b82f6', border: '1px solid #3b82f6', padding: '6px 12px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold' };
+const submitBtn = { backgroundColor: '#3b82f6', color: '#fff', border: 'none', borderRadius: '12px', padding: '16px', fontSize: '16px', fontWeight: '800', cursor: 'pointer', marginTop: '10px' };
 const disabledBtn = { ...submitBtn, backgroundColor: '#333', color: '#777' };
 
 export default Register;

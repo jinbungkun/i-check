@@ -10,6 +10,15 @@ function Attendance({ students = [], setStudents }) {
   const [lastStudent, setLastStudent] = useState(null);
   const [isError, setIsError] = useState(false);
 
+  // 📱 모바일 감지 상태
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const getTodayString = () => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -77,35 +86,37 @@ function Attendance({ students = [], setStudents }) {
   }, [processAttendance]);
 
   return (
-    <div style={containerStyle}>
+    <div style={containerStyle(isMobile)}>
       <div style={contentWrapper}>
-        <div style={headerSection}>
-          <h2 style={titleStyle}>스마트 출석 시스템</h2>
-          <div style={statusBadge(isError, status.includes('✅'))}>
+        <div style={headerSection(isMobile)}>
+          <h2 style={titleStyle(isMobile)}>스마트 출석 시스템</h2>
+          <div style={statusBadge(isError, status.includes('✅'), isMobile)}>
             {status}
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} style={formStyle}>
-          <div style={inputContainer}>
+        <form onSubmit={handleSubmit} style={formStyle(isMobile)}>
+          <div style={inputContainer(isMobile)}>
             <input
               type="text"
-              placeholder="이름 또는 ID를 입력하세요"
+              placeholder={isMobile ? "이름/ID 입력" : "이름 또는 ID를 입력하세요"}
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              style={inputStyle}
+              style={inputStyle(isMobile)}
               autoFocus
             />
-            <button type="submit" style={buttonStyle}>확인</button>
+            <button type="submit" style={buttonStyle(isMobile)}>확인</button>
           </div>
-          <p style={hintStyle}>NFC 카드를 태그하거나 정보를 입력 후 엔터를 누르세요.</p>
+          <p style={hintStyle}>NFC 태그 또는 정보를 직접 입력하세요.</p>
         </form>
 
         {lastStudent && (
-          <div style={resultCardStyle}>
-            <div style={avatarStyle}>{lastStudent.이름[0]}</div>
-            <div style={infoContent}>
-              <div style={welcomeText}>어서오세요, <span style={highlight}>{lastStudent.이름}</span> 학생!</div>
+          <div style={resultCardStyle(isMobile)}>
+            <div style={avatarStyle(isMobile)}>{lastStudent.이름[0]}</div>
+            <div style={infoContent(isMobile)}>
+              <div style={welcomeText(isMobile)}>
+                어서오세요, <span style={highlight}>{lastStudent.이름}</span> 학생!
+              </div>
               <div style={detailGrid}>
                 <div style={detailItem}>
                   <span style={label}>출석 시간</span>
@@ -124,37 +135,113 @@ function Attendance({ students = [], setStudents }) {
   );
 }
 
-// --- 스타일링 (프리미엄 다크 테마) ---
-const containerStyle = { width: '100%', minHeight: '80vh', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#1a1c23', padding: '20px' };
-const contentWrapper = { width: '100%', maxWidth: '600px', textAlign: 'center' };
-const headerSection = { marginBottom: '40px' };
-const titleStyle = { fontSize: '28px', fontWeight: '800', color: '#fff', marginBottom: '15px' };
+// --- 🎨 반응형 스타일링 ---
 
-const statusBadge = (isError, isSuccess) => ({
+const containerStyle = (isMobile) => ({
+  width: '100%',
+  minHeight: isMobile ? '70vh' : '80vh',
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: isMobile ? 'flex-start' : 'center',
+  backgroundColor: '#1a1c23',
+  padding: isMobile ? '20px 10px' : '20px',
+  boxSizing: 'border-box'
+});
+
+const contentWrapper = { width: '100%', maxWidth: '600px', textAlign: 'center' };
+
+const headerSection = (isMobile) => ({ marginBottom: isMobile ? '25px' : '40px' });
+
+const titleStyle = (isMobile) => ({
+  fontSize: isMobile ? '22px' : '28px',
+  fontWeight: '800',
+  color: '#fff',
+  marginBottom: '10px'
+});
+
+const statusBadge = (isError, isSuccess, isMobile) => ({
   display: 'inline-block',
-  padding: '8px 20px',
+  padding: isMobile ? '6px 15px' : '8px 20px',
   borderRadius: '20px',
   backgroundColor: isError ? '#442727' : isSuccess ? '#1e293b' : '#2d303a',
   color: isError ? '#ff4d4f' : isSuccess ? '#3b82f6' : '#999',
-  fontSize: '14px',
+  fontSize: isMobile ? '12px' : '14px',
   fontWeight: '600',
   border: `1px solid ${isError ? '#ff4d4f' : isSuccess ? '#3b82f6' : '#3d414d'}`,
   transition: '0.3s'
 });
 
-const formStyle = { marginBottom: '50px' };
-const inputContainer = { display: 'flex', gap: '10px', backgroundColor: '#24262d', padding: '10px', borderRadius: '16px', border: '1px solid #333', boxShadow: '0 10px 30px rgba(0,0,0,0.2)' };
-const inputStyle = { flex: 1, backgroundColor: 'transparent', border: 'none', color: '#fff', padding: '10px 15px', fontSize: '18px', outline: 'none' };
-const buttonStyle = { backgroundColor: '#3b82f6', color: '#fff', border: 'none', padding: '10px 25px', borderRadius: '12px', fontWeight: '700', cursor: 'pointer' };
+const formStyle = (isMobile) => ({ marginBottom: isMobile ? '30px' : '50px' });
+
+const inputContainer = (isMobile) => ({
+  display: 'flex',
+  gap: '10px',
+  backgroundColor: '#24262d',
+  padding: isMobile ? '8px' : '10px',
+  borderRadius: '16px',
+  border: '1px solid #333',
+  boxShadow: '0 10px 30px rgba(0,0,0,0.2)'
+});
+
+const inputStyle = (isMobile) => ({
+  flex: 1,
+  backgroundColor: 'transparent',
+  border: 'none',
+  color: '#fff',
+  padding: '10px 5px',
+  fontSize: isMobile ? '16px' : '18px',
+  outline: 'none',
+  width: '50px' // 가로 좁아짐 방지
+});
+
+const buttonStyle = (isMobile) => ({
+  backgroundColor: '#3b82f6',
+  color: '#fff',
+  border: 'none',
+  padding: isMobile ? '10px 15px' : '10px 25px',
+  borderRadius: '12px',
+  fontWeight: '700',
+  cursor: 'pointer',
+  fontSize: isMobile ? '14px' : '16px'
+});
+
 const hintStyle = { marginTop: '15px', color: '#555', fontSize: '13px' };
 
-const resultCardStyle = { 
-  display: 'flex', alignItems: 'center', backgroundColor: '#24262d', padding: '30px', borderRadius: '24px', border: '1px solid #3b82f6', 
-  boxShadow: '0 15px 35px rgba(59, 130, 246, 0.2)', animation: 'slideUp 0.5s ease' 
-};
-const avatarStyle = { width: '70px', height: '70px', backgroundColor: '#3b82f6', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '30px', fontWeight: '800', color: '#fff', marginRight: '25px' };
-const infoContent = { textAlign: 'left', flex: 1 };
-const welcomeText = { fontSize: '20px', fontWeight: '700', color: '#fff', marginBottom: '15px' };
+const resultCardStyle = (isMobile) => ({ 
+  display: 'flex', 
+  flexDirection: isMobile ? 'column' : 'row', // 📱 모바일은 세로로!
+  alignItems: 'center', 
+  backgroundColor: '#24262d', 
+  padding: isMobile ? '25px' : '30px', 
+  borderRadius: '24px', 
+  border: '1px solid #3b82f6', 
+  boxShadow: '0 15px 35px rgba(59, 130, 246, 0.2)',
+  gap: isMobile ? '20px' : '0'
+});
+
+const avatarStyle = (isMobile) => ({ 
+  width: isMobile ? '60px' : '70px', 
+  height: isMobile ? '60px' : '70px', 
+  backgroundColor: '#3b82f6', 
+  borderRadius: '20px', 
+  display: 'flex', 
+  alignItems: 'center', 
+  justifyContent: 'center', 
+  fontSize: isMobile ? '26px' : '30px', 
+  fontWeight: '800', 
+  color: '#fff', 
+  marginRight: isMobile ? '0' : '25px' 
+});
+
+const infoContent = (isMobile) => ({ textAlign: isMobile ? 'center' : 'left', flex: 1 });
+
+const welcomeText = (isMobile) => ({ 
+  fontSize: isMobile ? '18px' : '20px', 
+  fontWeight: '700', 
+  color: '#fff', 
+  marginBottom: '15px' 
+});
+
 const highlight = { color: '#3b82f6' };
 const detailGrid = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' };
 const detailItem = { display: 'flex', flexDirection: 'column', gap: '5px' };
