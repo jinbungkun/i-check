@@ -3,7 +3,7 @@ name: Auto Deploy
 on:
   push:
     branches:
-      - master  # 원장님의 메인 브랜치가 master이므로 그대로 둡니다.
+      - master
 
 jobs:
   build-and-deploy:
@@ -20,7 +20,8 @@ jobs:
       - name: Install and Build
         run: |
           npm install
-          npm run build
+          # 💡 아래 줄을 이렇게 수정합니다.
+          CI=false npm run build
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
