@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react'; // 💡 useRef 추가
 import { requestGAS } from '../utils/GoogleAppScript';
 import { getStudent, updateStudent } from '../utils/DataHelper';
 import { subscribeNFC } from '../utils/InputManager';
@@ -8,14 +8,23 @@ function Attendance({ students = [], setStudents }) {
   const [status, setStatus] = useState('시스템 대기 중...');
   const [lastStudent, setLastStudent] = useState(null);
   const [isError, setIsError] = useState(false);
+  
+  // 💡 타이머를 관리하기 위한 Ref (화면이 바뀌어도 유지됨)
+  const timerRef = useRef(null);
 
-  // 📱 모바일 감지 상태
+  // 📱 모바일 감지
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // 💡 정보를 화면에서 지우는 함수
+  const clearDisplay = useCallback(() => {
+    setLastStudent(null);
+    setStatus('시스템 대기 중...');
+    setIsError(false);
   }, []);
 
   const getTodayString = () => {
@@ -26,14 +35,17 @@ function Attendance({ students = [], setStudents }) {
   const processAttendance = useCallback(async (scannedIdOrName) => {
     if (!scannedIdOrName) return;
 
+    // 💡 새로운 카드가 찍히면 기존에 예약된 삭제 타이머를 즉시 취소
+    if (timerRef.current) clearTimeout(timerRef.current);
+
     const student = getStudent(students, scannedIdOrName);
 
-    // 1. 등록되지 않은 학생
     if (!student) {
       setIsError(true);
       setStatus('⚠️ 등록되지 않은 정보입니다.');
       setInputValue('');
-      setTimeout(() => { setStatus('시스템 대기 중...'); setIsError(false); }, 2000);
+      // 에러 메시지도 3초 후 삭제
+      timerRef.current = setTimeout(clearDisplay, 3000);
       return;
     }
 
@@ -41,63 +53,62 @@ function Attendance({ students = [], setStudents }) {
     const cleanToday = today.replace(/\D/g, '');
     const cleanLastRecord = String(student.마지막출석일 || "").replace(/\D/g, '').substring(0, 8);
 
-    // 2. 중복 출석 처리 (💡 주황색 카드를 띄우도록 수정됨)
-    if (cleanLastRecord === cleanToday) {
+    // 중복 출석 여부 확인
+    const isDuplicate = cleanLastRecord === cleanToday;
+
+    if (isDuplicate) {
       setIsError(true);
       setStatus(`⚠️ ${student.이름} 학생은 이미 출석했습니다.`);
-      setInputValue('');
-      
-      // 중복이라도 학생 정보를 카드에 띄움 (isDuplicate 플래그 설정)
-      setLastStudent({
-        ...student,
-        isDuplicate: true 
-      });
-
-      setTimeout(() => { 
-        setStatus('시스템 대기 중...'); 
-        setIsError(false); 
-      }, 2500);
-      return;
+    } else {
+      setStatus('✅ 출석이 완료되었습니다!');
+      setIsError(false);
     }
 
-    // 3. 신규 출석 로직
+    // 학생 정보 카드 표시
     const now = new Date();
     const timeStr = now.toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit' });
-    const fullTimeStr = `${today} ${timeStr}`;
-    
-    const updatedData = { ...student, 마지막출석일: fullTimeStr, isDuplicate: false };
+    const displayData = { 
+      ...student, 
+      마지막출석일: isDuplicate ? student.마지막출석일 : `${today} ${timeStr}`,
+      isDuplicate 
+    };
 
+    setLastStudent(displayData);
     setInputValue('');
-    setLastStudent(updatedData);
-    setStatus('✅ 출석이 완료되었습니다!');
-    setIsError(false);
 
-    if (typeof setStudents === 'function') {
-      setStudents(prev => updateStudent(prev, updatedData));
+    // 신규 출석일 경우에만 서버 전송 및 상태 업데이트
+    if (!isDuplicate) {
+      if (typeof setStudents === 'function') {
+        setStudents(prev => updateStudent(prev, displayData));
+      }
+      try {
+        await requestGAS({
+          method: 'POST',
+          action: 'checkIn',
+          studentId: student.ID,
+          studentName: student.이름
+        });
+      } catch (error) {
+        console.error("네트워크 에러:", error);
+      }
     }
 
-    try {
-      await requestGAS({
-        method: 'POST',
-        action: 'checkIn',
-        studentId: student.ID,
-        studentName: student.이름
-      });
-    } catch (error) {
-      console.error("네트워크 에러:", error);
-    }
+    // 💡 5초 후 화면을 깨끗이 비움 (자연스럽게 사라짐)
+    timerRef.current = setTimeout(clearDisplay, 5000);
 
-    setTimeout(() => setStatus('시스템 대기 중...'), 3000);
-  }, [students, setStudents]);
+  }, [students, setStudents, clearDisplay]);
 
   const handleSubmit = (e) => { e.preventDefault(); processAttendance(inputValue); };
 
   useEffect(() => {
     const unsubscribe = subscribeNFC(processAttendance);
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (timerRef.current) clearTimeout(timerRef.current); // 컴포넌트 언마운트 시 타이머 제거
+    };
   }, [processAttendance]);
 
-  // --- 🎨 인라인 스타일 객체들 ---
+  // --- 🎨 스타일링 (이전과 동일하지만 트랜지션 추가) ---
 
   const containerStyle = {
     width: '100%',
@@ -110,18 +121,6 @@ function Attendance({ students = [], setStudents }) {
     boxSizing: 'border-box'
   };
 
-  const statusBadgeStyle = {
-    display: 'inline-block',
-    padding: isMobile ? '6px 15px' : '8px 20px',
-    borderRadius: '20px',
-    backgroundColor: isError ? '#442727' : status.includes('✅') ? '#1e293b' : '#2d303a',
-    color: isError ? '#ff4d4f' : status.includes('✅') ? '#3b82f6' : '#999',
-    fontSize: isMobile ? '12px' : '14px',
-    fontWeight: '600',
-    border: `1px solid ${isError ? '#ff4d4f' : status.includes('✅') ? '#3b82f6' : '#3d414d'}`,
-    transition: '0.3s'
-  };
-
   const cardDynamicStyle = {
     display: 'flex', 
     flexDirection: isMobile ? 'column' : 'row',
@@ -129,27 +128,15 @@ function Attendance({ students = [], setStudents }) {
     backgroundColor: '#24262d', 
     padding: isMobile ? '25px' : '30px', 
     borderRadius: '24px', 
-    border: `2px solid ${lastStudent?.isDuplicate ? '#f97316' : '#3b82f6'}`, // 💡 상태별 색상 변경
+    border: `2px solid ${lastStudent?.isDuplicate ? '#f97316' : '#3b82f6'}`,
     boxShadow: lastStudent?.isDuplicate 
       ? '0 15px 35px rgba(249, 115, 22, 0.2)' 
       : '0 15px 35px rgba(59, 130, 246, 0.2)',
     gap: isMobile ? '20px' : '0',
     marginTop: '20px',
-    transition: 'all 0.3s ease'
-  };
-
-  const avatarDynamicStyle = {
-    width: isMobile ? '60px' : '70px', 
-    height: isMobile ? '60px' : '70px', 
-    backgroundColor: lastStudent?.isDuplicate ? '#f97316' : '#3b82f6', 
-    borderRadius: '20px', 
-    display: 'flex', 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    fontSize: isMobile ? '26px' : '30px', 
-    fontWeight: '800', 
-    color: '#fff', 
-    marginRight: isMobile ? '0' : '25px' 
+    transition: 'opacity 0.5s ease, transform 0.5s ease', // 💡 부드럽게 나타나고 사라짐
+    opacity: lastStudent ? 1 : 0,
+    transform: lastStudent ? 'translateY(0)' : 'translateY(20px)'
   };
 
   return (
@@ -159,7 +146,14 @@ function Attendance({ students = [], setStudents }) {
           <h2 style={{ fontSize: isMobile ? '22px' : '28px', fontWeight: '800', color: '#fff', marginBottom: '10px' }}>
             스마트 출석 시스템
           </h2>
-          <div style={statusBadgeStyle}>
+          <div style={{
+            display: 'inline-block', padding: isMobile ? '6px 15px' : '8px 20px', borderRadius: '20px',
+            backgroundColor: isError ? '#442727' : status.includes('✅') ? '#1e293b' : '#2d303a',
+            color: isError ? '#ff4d4f' : status.includes('✅') ? '#3b82f6' : '#999',
+            fontSize: isMobile ? '12px' : '14px', fontWeight: '600',
+            border: `1px solid ${isError ? '#ff4d4f' : status.includes('✅') ? '#3b82f6' : '#3d414d'}`,
+            transition: '0.3s'
+          }}>
             {status}
           </div>
         </div>
@@ -181,12 +175,16 @@ function Attendance({ students = [], setStudents }) {
               확인
             </button>
           </div>
-          <p style={{ marginTop: '15px', color: '#555', fontSize: '13px' }}>NFC 태그 또는 정보를 직접 입력하세요.</p>
         </form>
 
         {lastStudent && (
           <div style={cardDynamicStyle}>
-            <div style={avatarDynamicStyle}>
+            <div style={{
+              width: isMobile ? '60px' : '70px', height: isMobile ? '60px' : '70px',
+              backgroundColor: lastStudent.isDuplicate ? '#f97316' : '#3b82f6',
+              borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: isMobile ? '26px' : '30px', fontWeight: '800', color: '#fff', marginRight: isMobile ? '0' : '25px'
+            }}>
               {lastStudent.이름[0]}
             </div>
             <div style={{ textAlign: isMobile ? 'center' : 'left', flex: 1 }}>
