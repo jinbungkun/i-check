@@ -20,10 +20,9 @@ jobs:
       - name: Install and Build
         run: |
           npm install
-          # 💡 아래 줄을 이렇게 수정합니다.
           CI=false npm run build
 
-      - name: Deploy
+      - name: Deploy`
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: build
