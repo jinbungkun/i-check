@@ -58,12 +58,29 @@ function Register({ setStudents, headers = [] }) {
     return () => unsubscribe();
   }, [handleNFCTag]);
 
+  // 💡 수정된 handleSubmit 함수
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // 1. 필수 입력값 검사
     if (!formData.이름 || !formData.ID) {
       setStatus({ type: 'error', msg: '⚠️ 이름과 ID는 필수입니다.' });
       return;
     }
+
+    // 2. 💡 등록 확인 알림창 추가
+    const confirmMsg = `
+[등록 정보 확인]
+이름: ${formData.이름}
+NFC ID: ${formData.ID}
+스케줄: ${formData['수업 스케줄'] || '없음'}
+
+이 정보로 신규 등록하시겠습니까?`;
+
+    if (!window.confirm(confirmMsg)) {
+      return; // '취소'를 누르면 여기서 중단
+    }
+
     setIsSubmitting(true);
     try {
       const studentDataForGAS = {};
@@ -81,14 +98,20 @@ function Register({ setStudents, headers = [] }) {
       if (response.status === "success") {
         setStatus({ type: 'success', msg: `✅ ${formData.이름} 등록 완료!` });
         if (setStudents) setStudents(prev => [...prev, { ...formData, 마지막출석일: '' }]);
+        
+        // 입력 폼 초기화
         const resetData = {};
         headers.forEach(h => { if (!excludeFields.includes(h)) resetData[h] = ''; });
         setFormData(resetData);
       }
-    } catch (e) { setStatus({ type: 'error', msg: '❌ 에러 발생' }); }
-    finally { setIsSubmitting(false); }
+    } catch (e) { 
+      setStatus({ type: 'error', msg: '❌ 서버 통신 에러가 발생했습니다.' }); 
+    } finally { 
+      setIsSubmitting(false); 
+    }
   };
 
+  // --- 스타일 정의 부분 (기존과 동일) ---
   return (
     <div style={containerStyle(isMobile)}>
       <div style={cardStyle(isMobile)}>
@@ -100,7 +123,6 @@ function Register({ setStudents, headers = [] }) {
 
         <form onSubmit={handleSubmit} style={formStyle}>
           <div style={inputGrid(isMobile)}>
-            {/* 기본 정보 */}
             <div style={inputGroup}>
               <label style={labelStyle}>학생 이름 *</label>
               <input name="이름" value={formData.이름 || ''} onChange={handleChange} style={inputStyle} placeholder="이름 입력" />
@@ -111,7 +133,6 @@ function Register({ setStudents, headers = [] }) {
               <input name="ID" value={formData.ID || ''} onChange={handleChange} style={{...inputStyle, borderColor: formData.ID ? '#3b82f6' : '#3d414d'}} placeholder="카드를 찍어주세요" />
             </div>
 
-            {/* 수업 스케줄 (반응형 레이아웃) */}
             <div style={{...inputGroup, gridColumn: isMobile ? 'span 1' : 'span 2'}}>
               <label style={labelStyle}>수업 스케줄 설정</label>
               <div style={selectorContainer(isMobile)}>
@@ -156,7 +177,6 @@ function Register({ setStudents, headers = [] }) {
               <input type="date" name="생년월일" value={formData.생년월일 || ''} onChange={handleChange} style={{...inputStyle, colorScheme: 'dark'}} />
             </div>
 
-            {/* 자동 생성 섹션 */}
             {headers.map(header => {
               if (excludeFields.includes(header) || manualFields.includes(header)) return null;
               return (
@@ -177,7 +197,7 @@ function Register({ setStudents, headers = [] }) {
   );
 }
 
-// 🎨 반응형 디자인 스타일
+// 🎨 스타일 코드 (변경 없음)
 const containerStyle = (isMobile) => ({ width: '100%', minHeight: '100vh', backgroundColor: '#1a1c23', padding: isMobile ? '10px' : '40px 5%', display: 'flex', justifyContent: 'center', boxSizing: 'border-box' });
 const cardStyle = (isMobile) => ({ width: '100%', maxWidth: '800px', backgroundColor: '#24262d', borderRadius: isMobile ? '16px' : '24px', padding: isMobile ? '20px' : '40px', border: '1px solid #333', boxSizing: 'border-box' });
 const titleStyle = (isMobile) => ({ fontSize: isMobile ? '20px' : '24px', fontWeight: '800', color: '#fff', margin: 0 });
@@ -186,7 +206,6 @@ const selectorContainer = (isMobile) => ({ display: 'flex', flexDirection: isMob
 const dayButtonGroup = (isMobile) => ({ display: 'flex', gap: '4px', justifyContent: 'space-between', flexWrap: isMobile ? 'wrap' : 'nowrap' });
 const dayBtn = (isMobile) => ({ flex: 1, minWidth: isMobile ? '40px' : 'auto', padding: '8px', borderRadius: '8px', border: '1px solid #3d414d', backgroundColor: '#24262d', color: '#999', cursor: 'pointer', fontWeight: 'bold', fontSize: isMobile ? '12px' : '14px' });
 const dayBtnActive = { ...dayBtn(false), backgroundColor: '#3b82f6', color: '#fff', borderColor: '#3b82f6', flex: 1 };
-
 const headerStyle = { marginBottom: '25px', borderBottom: '1px solid #333', paddingBottom: '15px' };
 const statusBanner = (type) => ({ padding: '15px', borderRadius: '10px', marginBottom: '20px', backgroundColor: type === 'success' ? '#1e293b' : '#442727', color: type === 'success' ? '#3b82f6' : '#ff4d4f', border: `1px solid ${type === 'success' ? '#3b82f6' : '#ff4d4f'}`, fontSize: '14px' });
 const formStyle = { display: 'flex', flexDirection: 'column', gap: '20px' };
