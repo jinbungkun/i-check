@@ -62,7 +62,10 @@ function ScheduleView({ students = [] }) {
   const handleSaveExtra = async () => {
     if (!formData.name) return alert("이름을 입력하세요.");
     
-    // 💡 payload에 id: "" 를 명시적으로 추가하여 전송
+    // 1️⃣ 즉시 모달 닫기 & 팝업 띄우기 (서버 응답 기다리지 않음)
+    setShowModal(false);
+    alert("등록 요청을 보냈습니다. 곧 목록에 반영됩니다.");
+
     const payload = {
       method: 'POST',
       action: 'addExtraSchedule',
@@ -71,15 +74,18 @@ function ScheduleView({ students = [] }) {
     };
 
     try {
+      // 2️⃣ 서버 통신은 백그라운드에서 실행
       const res = await requestGAS(payload);
       const result = res?.data || res;
+      
       if (result.status === "success") {
-        alert("등록 완료!");
-        setShowModal(false);
+        // 3️⃣ 뒤에서 성공하면 목록만 살짝 새로고침
         fetchExtras(); 
       }
     } catch (e) { 
-      alert("서버 통신 실패"); 
+      // 실패했을 때만 알려줌
+      console.error("서버 통신 실패", e);
+      alert(`${formData.name} 학생 등록 중 오류가 발생했습니다. 다시 확인해 주세요.`); 
     }
   };
 
