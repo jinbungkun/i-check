@@ -1,6 +1,6 @@
 {
-  "short_name": "React App",
-  "name": "Create React App Sample",
+  "short_name": "학원관리",
+  "name": "i-Check 학원관리",
   "icons": [
     {
       "src": "favicon.ico",
