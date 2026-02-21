@@ -231,11 +231,17 @@ const DailyDashboard = ({ day, groupedData, isMobile }) => (
   <div style={{ width: '100%' }}>
     <div style={infoBarStyle(isMobile)}>
       <span>📅 <b>{day}요일</b></span>
-      <span style={countTagStyle}>총 {Object.values(groupedData).flat().length}명</span>
+      <span style={countTagStyle}>오늘 총 {Object.values(groupedData).flat().length}명</span>
     </div>
+    
     {Object.keys(groupedData).length > 0 ? Object.entries(groupedData).map(([time, members]) => (
       <section key={time} style={timeSectorStyle(isMobile)}>
-        <div style={timeIndicatorStyle(isMobile)}>{time}</div>
+        <div style={timeIndicatorStyle(isMobile)}>
+          {time}
+          {/* 💡 시간 바로 아래에 해당 시간대 인원수 추가 */}
+          <div style={timeCountStyle}>{members.length}명</div>
+        </div>
+        
         <div style={cardGridStyle(isMobile)}>
           {members.map((s, i) => (
             <div key={i} style={s.isAttended ? attendedCard(isMobile) : (s.isExtra ? extraCard(isMobile) : studentCard(isMobile))}>
@@ -265,7 +271,12 @@ const WeeklyBoard = ({ days, getGroupedData, getDisplayDate, isMobile }) => (
           <div style={{ padding: '10px' }}>
             {Object.keys(grouped).map(time => (
               <div key={time} style={{ marginBottom: '12px' }}>
-                <div style={smallTimeLabel}>{time}</div>
+                {/* 💡 시간과 인원수를 함께 표시 */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <div style={smallTimeLabel}>{time}</div>
+                  <div style={weeklyCountBadge}>{grouped[time].length}명</div>
+                </div>
+                
                 {grouped[time].map((s, i) => (
                   <div key={i} style={s.isExtra ? weeklyExtraItem : weeklyNameItem}>
                     {s.이름} {s.isExtra && `(${s.유형[0]})`}
@@ -281,6 +292,20 @@ const WeeklyBoard = ({ days, getGroupedData, getDisplayDate, isMobile }) => (
 );
 
 // --- 🎨 스타일 (기존 스타일 유지) ---
+const weeklyCountBadge = {
+  fontSize: '10px',
+  color: '#888',
+  backgroundColor: '#333',
+  padding: '1px 5px',
+  borderRadius: '4px',
+  fontWeight: 'normal'
+};
+const timeCountStyle = {
+  fontSize: '12px',
+  color: '#888',
+  fontWeight: 'normal',
+  marginTop: '4px'
+};
 const syncLabelStyle = { fontSize: '11px', color: '#3b82f6', fontWeight: 'bold', backgroundColor: '#3b82f622', padding: '2px 8px', borderRadius: '10px' };
 const addBtnStyle = { backgroundColor: '#3b82f6', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' };
 const extraCard = (isMobile) => ({ ...studentCard(isMobile), border: '1px dashed #8b5cf6', backgroundColor: '#2d2142' });
