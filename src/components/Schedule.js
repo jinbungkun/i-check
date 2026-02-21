@@ -294,7 +294,7 @@ const WeeklyBoard = ({ days, getGroupedData, getDisplayDate, isMobile }) => (
 // --- 🎨 스타일 (기존 스타일 유지) ---
 const weeklyCountBadge = {
   fontSize: '10px',
-  color: '#888',
+  color: '#d8d8d8',
   backgroundColor: '#333',
   padding: '1px 5px',
   borderRadius: '4px',
@@ -302,7 +302,7 @@ const weeklyCountBadge = {
 };
 const timeCountStyle = {
   fontSize: '12px',
-  color: '#888',
+  color: '#d8d8d8',
   fontWeight: 'normal',
   marginTop: '4px'
 };
