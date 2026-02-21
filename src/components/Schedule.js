@@ -97,53 +97,62 @@ function ScheduleView({ students = [] }) {
     return `${String(targetDate.getMonth() + 1).padStart(2, '0')}/${String(targetDate.getDate()).padStart(2, '0')}`;
   };
 
-  const getGroupedData = (targetDay, checkAttendance = false) => {
+ const getGroupedData = (targetDay, checkAttendance = false) => {
     const todayStr = getTodayFullString().replace(/\D/g, '');
     const safeStudents = Array.isArray(students) ? students : [];
 
+    // 1. 해당 요일에 수업이 있는 학생만 필터링
     const dayStudents = safeStudents.filter(s => {
       const schedule = s?.수업스케줄 || s?.["수업 스케줄"] || "";
       return schedule.includes(targetDay);
     });
 
-    // ScheduleView.js 내 getGroupedData 함수 내부
-
-const dayExtras = extraSchedules.filter(ex => {
-  try {
-    if (!ex.날짜) return false;
-    // 시트에서 가져온 "2026-02-04" 같은 날짜 텍스트를 분석
-    const dateMatch = String(ex.날짜).match(/\d{4}-\d{2}-\d{2}/);
-    if (!dateMatch) return false;
-
-    const [y, m, d] = dateMatch[0].split('-').map(Number);
-    const exDate = new Date(y, m - 1, d); // 현지 시간 기준으로 요일 계산
-    
-    return days[exDate.getDay()] === targetDay;
-  } catch (e) {
-    return false;
-  }
-}).map(ex => ({
-  ...ex,
-  // 💡 중요: 이제 ex.ID는 없으므로 시트 컬럼명과 일치하는지 확인
-  수업스케줄: `${ex.시간 || '시간미정'} (${ex.유형 || '보강'})`,
-  isExtra: true
-}));
+    // 2. 보강/체험 데이터 필터링
+    const dayExtras = extraSchedules.filter(ex => {
+      try {
+        if (!ex.날짜) return false;
+        const dateMatch = String(ex.날짜).match(/\d{4}-\d{2}-\d{2}/);
+        if (!dateMatch) return false;
+        const [y, m, d] = dateMatch[0].split('-').map(Number);
+        const exDate = new Date(y, m - 1, d);
+        return days[exDate.getDay()] === targetDay;
+      } catch (e) {
+        return false;
+      }
+    }).map(ex => ({
+      ...ex,
+      수업스케줄: `${ex.시간 || '시간미정'} (${ex.유형 || '보강'})`,
+      isExtra: true
+    }));
 
     const combined = [...dayStudents, ...dayExtras];
 
+    // 3. 시간대별 그룹화 로직 핵심 수정
     const grouped = combined.reduce((acc, s) => {
       let time = "시간미정";
+
       if (s.isExtra) {
-        // 시간 데이터에서 불필요한 날짜 정보 제거 로직 포함
         const rawTime = String(s.시간 || "");
         const timeMatch = rawTime.match(/(\d{1,2}:\d{2})/);
         time = timeMatch ? timeMatch[0] : "시간미정";
       } else {
         const scheduleStr = s?.수업스케줄 || s?.["수업 스케줄"] || "";
-        const timeMatch = scheduleStr.match(/(\d{1,2}:\d{2})/);
-        time = timeMatch ? timeMatch[0] : "시간미정";
+        
+        // 💡 수정 포인트: 현재 요일(targetDay) 바로 뒤에 오는 시간만 추출
+        // 예: '화17:00, 목18:00' 에서 targetDay가 '목'이면 '18:00'을 가져옴
+        const daySpecificRegex = new RegExp(`${targetDay}\\s*(\\d{1,2}:\\d{2})`);
+        const match = scheduleStr.match(daySpecificRegex);
+        
+        if (match) {
+          time = match[1]; 
+        } else {
+          // 예외 상황 대비 첫 시간 추출
+          const firstTimeMatch = scheduleStr.match(/(\d{1,2}:\d{2})/);
+          time = firstTimeMatch ? firstTimeMatch[0] : "시간미정";
+        }
       }
 
+      // 시간 포맷 통일 (9:00 -> 09:00) 하여 정렬 오류 방지
       if (time !== "시간미정" && /^\d:\d{2}$/.test(time)) time = "0" + time;
 
       let isAttended = false;
@@ -157,6 +166,7 @@ const dayExtras = extraSchedules.filter(ex => {
       return acc;
     }, {});
 
+    // 시간순 정렬 후 반환
     return Object.keys(grouped).sort().reduce((obj, key) => {
       obj[key] = grouped[key];
       return obj;
