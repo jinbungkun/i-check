@@ -39,7 +39,7 @@ function Register({ setStudents, headers = [] }) {
 
   const addSchedule = () => {
     if (!selectedDay) { alert("요일을 선택해주세요!"); return; }
-    const newSchedule = `${selectedDay}(${selectedTime})`;
+    const newSchedule = `${selectedDay}${selectedTime}`;
     const currentSchedules = formData['수업 스케줄'] ? formData['수업 스케줄'].split(', ') : [];
     if (currentSchedules.includes(newSchedule)) return;
 
