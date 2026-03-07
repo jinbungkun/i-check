@@ -7,7 +7,7 @@ import Points from './components/Points';
 import Register from './components/Register';
 import Setting from './components/Setting';
 import Birthday from './components/Birthday';
-
+import Report from './components/Report';
 // 유틸리티 및 테마
 import { requestGAS } from './utils/GoogleAppScript';
 import { filterEssentialData } from './utils/DataHelper'; 
@@ -49,7 +49,7 @@ function App() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const { app: styles } = theme;
-  const menuCategories = ['출석','생일','조회', '스케쥴', '포인트', '등록', '설정'];
+  const menuCategories = ['출석','생일','조회', '스케쥴', '포인트', '등록', '성적표', '설정'];
 
   // 화면 크기 실시간 감지
   useEffect(() => {
@@ -119,7 +119,8 @@ function App() {
       '조회': <Search {...sharedProps} />,
       '스케쥴': <Schedule {...sharedProps} />,
       '포인트': <Points {...sharedProps} />,
-      '등록': <Register {...sharedProps} />, 
+      '등록': <Register {...sharedProps} />,
+      '성적표': <Report {...sharedProps} />,  
       '설정': <Setting />
     };
 
