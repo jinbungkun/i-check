@@ -11,11 +11,14 @@ function Search({ students = [], setStudents }) {
   const [isReplacing, setIsReplacing] = useState(false); 
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   
-  // 💡 [추가] 달력의 현재 표시 날짜를 제어 (튕김 방지 핵심)
+  // 💡 [추가] 스케줄 수정 모드 상태 및 입력값 관리
+  const [isEditingSchedule, setIsEditingSchedule] = useState(false);
+  const [newSchedule, setNewSchedule] = useState('');
+
   const [viewDate, setViewDate] = useState(new Date());
   const [currentViewYear, setCurrentViewYear] = useState(new Date().getFullYear());
-
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
@@ -26,9 +29,7 @@ function Search({ students = [], setStudents }) {
     const target = (searchId || query).trim();
     if (!target) return;
 
-    // 💡 달력 넘길 때 넘겨받은 날짜가 있다면 viewDate 업데이트
     if (targetDate) setViewDate(targetDate);
-
     const fetchDate = targetDate || viewDate; 
     const fetchYear = fetchDate.getFullYear();
 
@@ -38,7 +39,9 @@ function Search({ students = [], setStudents }) {
 
     if (found) {
       setSelectedStudent(found); 
+      setNewSchedule(found.수업스케줄 || ''); // 검색 시 현재 스케줄 세팅
       setIsReplacing(false);
+      setIsEditingSchedule(false); // 수정 모드 초기화
       setIsLoadingLogs(true);
 
       try {
@@ -75,6 +78,33 @@ function Search({ students = [], setStudents }) {
     }
   };
 
+  // 💡 [추가] 스케줄 업데이트 함수
+  const handleUpdateSchedule = async () => {
+    if (!selectedStudent) return;
+    
+    try {
+      const res = await requestGAS({
+        method: 'POST',
+        action: 'updateStudent',
+        studentData: {
+          ...selectedStudent,
+          수업스케줄: newSchedule // 바뀐 스케줄만 덮어씌움
+        }
+      });
+
+      if (res.status === "success" || (res.data && res.data.status === "success")) {
+        // 리액트 상태 동기화
+        const updatedStudent = { ...selectedStudent, 수업스케줄: newSchedule };
+        setStudents(prev => prev.map(s => s.ID === selectedStudent.ID ? updatedStudent : s));
+        setSelectedStudent(updatedStudent);
+        setIsEditingSchedule(false);
+        alert("✅ 스케줄이 수정되었습니다.");
+      }
+    } catch (err) {
+      alert("❌ 수정 중 오류가 발생했습니다.");
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = subscribeNFC(async (scannedId) => {
       if (isReplacing && selectedStudent) {
@@ -102,7 +132,7 @@ function Search({ students = [], setStudents }) {
       }
     });
     return () => unsubscribe();
-  }, [isReplacing, selectedStudent, students, viewDate]); // viewDate 의존성 추가
+  }, [isReplacing, selectedStudent, students, viewDate]);
 
   return (
     <div style={containerStyle}>
@@ -138,9 +168,37 @@ function Search({ students = [], setStudents }) {
               <div style={infoItem}><span style={infoLabel}>보유 포인트</span><span style={infoValuePrimary}>{Number(selectedStudent.포인트 || 0).toLocaleString()} P</span></div>
               <div style={infoItem}><span style={infoLabel}>학부모 연락</span><span style={infoValue}>{selectedStudent.학부모전화번호 || '-'}</span></div>
               <div style={infoItem}><span style={infoLabel}>본인 연락</span><span style={infoValue}>{selectedStudent.본인전화번호 || '-'}</span></div>
-              <div style={infoItem}><span style={infoLabel}>스케줄</span><span style={{...infoValue, fontSize: '12px'}}>{selectedStudent.수업스케줄 || '-'}</span></div>
+              
+              {/* 💡 스케줄 영역: 수정 모드 여부에 따라 UI 변경 */}
+              <div style={{...infoItem, flexDirection: 'column', alignItems: 'flex-start', borderBottom: 'none'}}>
+                <div style={{display:'flex', justifyContent:'space-between', width:'100%', marginBottom: '5px'}}>
+                   <span style={infoLabel}>스케줄</span>
+                   {!isEditingSchedule ? (
+                     <button onClick={() => setIsEditingSchedule(true)} style={miniBtnStyle}>수정</button>
+                   ) : (
+                     <div style={{display:'flex', gap:'5px'}}>
+                       <button onClick={handleUpdateSchedule} style={{...miniBtnStyle, color:'#10b981'}}>저장</button>
+                       <button onClick={() => {setIsEditingSchedule(false); setNewSchedule(selectedStudent.수업스케줄);}} style={{...miniBtnStyle, color:'#ef4444'}}>취소</button>
+                     </div>
+                   )}
+                </div>
+                {isEditingSchedule ? (
+                  <input 
+                    style={editInputStyle} 
+                    value={newSchedule} 
+                    onChange={(e) => setNewSchedule(e.target.value)} 
+                    placeholder="예: 월 14:00, 수 16:00"
+                  />
+                ) : (
+                  <span style={{...infoValue, fontSize: '13px', backgroundColor: '#1a1c23', padding: '8px', borderRadius: '8px', width: '100%', boxSizing: 'border-box'}}>
+                    {selectedStudent.수업스케줄 || '-'}
+                  </span>
+                )}
+              </div>
             </div>
+
             <hr style={dividerStyle} />
+            
             {!isReplacing ? (
               <button style={replaceBtnStyle} onClick={() => setIsReplacing(true)}>🔁 카드 분실/교체</button>
             ) : (
@@ -160,10 +218,9 @@ function Search({ students = [], setStudents }) {
             
             <div style={calendarWrapper(isMobile)}>
               <Calendar 
-                // 💡 [중요] key 속성을 제거하여 달력의 연속성을 유지합니다.
-                activeStartDate={viewDate} // 💡 위치 고정
+                activeStartDate={viewDate} 
                 onActiveStartDateChange={({ activeStartDate }) => {
-                  setViewDate(activeStartDate); // 💡 이동한 위치 저장
+                  setViewDate(activeStartDate); 
                   if (selectedStudent && activeStartDate.getFullYear() !== currentViewYear) {
                     handleSearch(selectedStudent.ID, activeStartDate);
                   }
@@ -190,7 +247,11 @@ function Search({ students = [], setStudents }) {
   );
 }
 
-// 스타일 코드 생략 (기존과 동일)
+// --- 추가된 스타일 ---
+const miniBtnStyle = { background: 'none', border: 'none', color: '#3b82f6', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', padding: '2px 5px' };
+const editInputStyle = { width: '100%', backgroundColor: '#1a1c23', border: '1px solid #3b82f6', borderRadius: '8px', padding: '8px', color: '#fff', fontSize: '13px', outline: 'none' };
+
+// --- 기존 스타일 유지 ---
 const containerStyle = { width: '100%', minHeight: '100vh', backgroundColor: '#1a1c23', color: '#fff' };
 const headerStyle = (isMobile) => ({ padding: isMobile ? '20px 15px' : '30px 5%', borderBottom: '1px solid #333', backgroundColor: '#24262d' });
 const titleStyle = (isMobile) => ({ margin: '0 0 15px 0', fontSize: isMobile ? '20px' : '24px', fontWeight: '800' });
