@@ -55,27 +55,34 @@ function Report({ headers }) {
   }, []);
 
   // 💡 데이터 로드 로직: e.filter 에러 완벽 방어
-  const loadData = async () => {
+ const loadData = async () => {
+    // 이미 불러온 데이터가 있다면 다시 부르지 않음 (중복 방지)
     if (fullStudents.length > 0) return fullStudents;
+
     setIsLoading(true);
     try {
+      // [1단계: 데이터 받기]
       const res = await requestGAS({ action: 'getStudents' });
       
-      // ✨ 데이터가 배열인지 엄격히 검사
-      if (res && Array.isArray(res)) {
-        // '상태' 컬럼이 있는지 확인하며 필터링
-        const activeOnly = res.filter(s => s && (s.상태 === "재원" || s["재원상태"] === "재원"));
-        setFullStudents(activeOnly);
-        return activeOnly;
-      } else {
-        console.error("GAS Response Error:", res);
-        alert("데이터 형식이 올바르지 않습니다. GAS 코드를 확인하거나 시트의 컬럼명을 확인하세요.");
-        return [];
+      // [2단계: 박스 까기 및 선별]
+      // res.data가 진짜 학생 명단 배열입니다.
+      const rawData = res.data || res; 
+      
+      if (Array.isArray(rawData)) {
+        // '상태'가 '재원'인 인원만 선별
+        const selectedStudents = rawData.filter(student => student.상태 === "재원");
+        
+        // 선별된 데이터를 화면(상태)에 저장
+        setFullStudents(selectedStudents);
+        return selectedStudents;
       }
-    } catch (e) { 
-      alert("서버 통신 중 오류가 발생했습니다.");
-      return []; 
-    } finally { setIsLoading(false); }
+      return [];
+    } catch (e) {
+      alert("데이터 선별 중 오류 발생!");
+      return [];
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleImageUpload = async (e) => {
