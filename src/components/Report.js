@@ -3,7 +3,7 @@ import { requestGAS } from '../utils/GoogleAppScript';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
-// IndexedDB 설정 (배경 이미지 영구 저장)
+// IndexedDB 설정 (이미지 저장용)
 const dbName = "ReportEditorDB";
 const storeName = "assets";
 const initDB = () => {
@@ -20,13 +20,11 @@ const initDB = () => {
 function Report({ headers }) {
   const [fullStudents, setFullStudents] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  
-  // 💡 진행 상태 관리
   const [progress, setProgress] = useState({ current: 0, total: 0, status: 'idle' }); 
-  
   const [bgImage, setBgImage] = useState(null);
   const [elements, setElements] = useState([]);
   const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
+  
   const [targetId, setTargetId] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -56,6 +54,30 @@ function Report({ headers }) {
     loadSavedImage();
   }, []);
 
+  // 💡 데이터 로드 로직: e.filter 에러 완벽 방어
+  const loadData = async () => {
+    if (fullStudents.length > 0) return fullStudents;
+    setIsLoading(true);
+    try {
+      const res = await requestGAS({ action: 'getStudents' });
+      
+      // ✨ 데이터가 배열인지 엄격히 검사
+      if (res && Array.isArray(res)) {
+        // '상태' 컬럼이 있는지 확인하며 필터링
+        const activeOnly = res.filter(s => s && (s.상태 === "재원" || s["재원상태"] === "재원"));
+        setFullStudents(activeOnly);
+        return activeOnly;
+      } else {
+        console.error("GAS Response Error:", res);
+        alert("데이터 형식이 올바르지 않습니다. GAS 코드를 확인하거나 시트의 컬럼명을 확인하세요.");
+        return [];
+      }
+    } catch (e) { 
+      alert("서버 통신 중 오류가 발생했습니다.");
+      return []; 
+    } finally { setIsLoading(false); }
+  };
+
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -75,21 +97,6 @@ function Report({ headers }) {
     }
   };
 
-  const loadData = async () => {
-    if (fullStudents.length > 0) return fullStudents;
-    setIsLoading(true);
-    try {
-      const res = await requestGAS({ action: 'getStudents' });
-      if (res) {
-        const activeOnly = res.filter(s => s.상태 === "재원");
-        setFullStudents(activeOnly);
-        return activeOnly;
-      }
-    } catch (e) { alert(e.message); }
-    finally { setIsLoading(false); }
-    return [];
-  };
-
   const generateImageBlob = (student, bgImgObj) => {
     return new Promise((resolve) => {
       const canvas = document.createElement('canvas');
@@ -104,17 +111,16 @@ function Report({ headers }) {
         ctx.textAlign = "left"; ctx.textBaseline = "top";
         ctx.fillText(student[el.text] || "", el.x * ratio, el.y * ratio);
       });
-      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.8); // 용량 최적화를 위해 0.8 권장
+      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.8);
     });
   };
 
-  // 💡 [메인 기능] 전체 압축 및 진행률 표시
   const handleZipDownload = async () => {
-    if (!bgImage) return alert("배경 이미지를 업로드해주세요.");
+    if (!bgImage) return alert("배경 이미지를 먼저 업로드해주세요.");
     const studentsToPrint = await loadData();
-    if (studentsToPrint.length === 0) return;
+    if (!studentsToPrint || studentsToPrint.length === 0) return alert("출력할 재원생 데이터가 없습니다.");
 
-    if (!window.confirm(`${studentsToPrint.length}명의 재원생 성적표 압축을 시작합니다.`)) return;
+    if (!window.confirm(`${studentsToPrint.length}명의 압축 파일 생성을 시작합니다.`)) return;
 
     setProgress({ current: 0, total: studentsToPrint.length, status: 'processing' });
 
@@ -123,29 +129,25 @@ function Report({ headers }) {
     bgImgObj.src = bgImage;
 
     bgImgObj.onload = async () => {
-      for (let i = 0; i < studentsToPrint.length; i++) {
-        const student = studentsToPrint[i];
-        const blob = await generateImageBlob(student, bgImgObj);
-        zip.file(`${student.이름}_성적표.jpg`, blob);
-        
-        // 💡 실시간 진행률 업데이트
-        setProgress(prev => ({ ...prev, current: i + 1 }));
+      try {
+        for (let i = 0; i < studentsToPrint.length; i++) {
+          const blob = await generateImageBlob(studentsToPrint[i], bgImgObj);
+          zip.file(`${studentsToPrint[i].이름 || '학생' + i}_성적표.jpg`, blob);
+          setProgress(prev => ({ ...prev, current: i + 1 }));
+        }
+        setProgress(prev => ({ ...prev, status: 'zipping' }));
+        const content = await zip.generateAsync({ type: "blob" });
+        saveAs(content, `성적표_전체_${new Date().toISOString().slice(0, 10)}.zip`);
+        alert("성공적으로 다운로드되었습니다!");
+      } catch (e) {
+        alert("압축 도중 에러가 발생했습니다.");
+      } finally {
+        setProgress({ current: 0, total: 0, status: 'idle' });
       }
-
-      setProgress(prev => ({ ...prev, status: 'zipping' }));
-      
-      const content = await zip.generateAsync({ type: "blob" });
-      
-      // 💡 완료 시 파일명에 날짜 포함하여 자동 다운로드
-      const fileName = `성적표_전체_${new Date().toISOString().slice(0, 10)}.zip`;
-      saveAs(content, fileName);
-      
-      setProgress({ current: 0, total: 0, status: 'idle' });
-      alert("전체 다운로드가 완료되었습니다!");
     };
   };
 
-  // 마우스 이벤트 (드래그/리사이즈)
+  // 드래그 & 리사이즈 핸들러
   const onMouseDown = (e, el, type) => {
     e.stopPropagation(); e.preventDefault();
     setTargetId(el.id);
@@ -190,17 +192,9 @@ function Report({ headers }) {
         <div style={{display:'flex', gap:'10px'}}>
            <input type="file" onChange={handleImageUpload} accept="image/*" id="bg-upload" style={{display:'none'}} />
            <label htmlFor="bg-upload" style={topBtn}>📸 배경 변경</label>
-           
-           {/* 💡 버튼에 진행률 표시 */}
-           <button 
-             onClick={handleZipDownload} 
-             disabled={progress.status !== 'idle'}
-             style={{...topBtn, backgroundColor: progress.status !== 'idle' ? '#6b7280' : '#f59e0b'}}
-           >
-             {progress.status === 'processing' ? `⏳ 생성 중 (${progress.current}/${progress.total})` :
-              progress.status === 'zipping' ? `📦 압축 파일 생성 중...` : `📦 재원생 전체 압축다운`}
+           <button onClick={handleZipDownload} disabled={progress.status !== 'idle'} style={{...topBtn, backgroundColor: progress.status !== 'idle' ? '#6b7280' : '#f59e0b'}}>
+             {progress.status === 'processing' ? `⏳ 생성 중 (${progress.current}/${progress.total})` : progress.status === 'zipping' ? `📦 압축 중...` : `📦 재원생 전체 압축다운`}
            </button>
-
            <button onClick={() => { localStorage.setItem('report_config', JSON.stringify(elements)); alert("💾 저장완료"); }} style={{...topBtn, backgroundColor: '#10b981'}}>💾 설정 저장</button>
         </div>
       </div>
@@ -209,7 +203,6 @@ function Report({ headers }) {
         <div style={sidePanel}>
           <h4 style={panelTitle}>1. 항목 추가</h4>
           <div style={tagBox}>{headers.map(h => <button key={h} onClick={() => setElements([...elements, {id:Date.now(), text:h, x:50, y:50, fontSize:24, color:'#000'}])} style={tagBtn}>{h} +</button>)}</div>
-
           <h4 style={{...panelTitle, marginTop: '25px'}}>2. 항목 설정 & 삭제</h4>
           <div style={elementList}>
             {elements.map(el => (
@@ -223,10 +216,9 @@ function Report({ headers }) {
               </div>
             ))}
           </div>
-
           <h4 style={{...panelTitle, marginTop: '25px'}}>3. 재원생 명단 ({fullStudents.length})</h4>
           <div style={studentList}>
-            {isLoading ? <p>불러오는 중...</p> : fullStudents.length === 0 ? <button onClick={loadData} style={loadBtn}>명단 미리보기</button> :
+            {isLoading ? <p>불러오는 중...</p> : fullStudents.length === 0 ? <button onClick={loadData} style={loadBtn}>명단 불러오기</button> :
              fullStudents.map(s => (
                <div key={s.ID} style={studentItem}><span>{s.이름}</span><button onClick={() => {
                  const img = new Image(); img.src = bgImage; img.onload = () => generateImageBlob(s, img).then(blob => saveAs(blob, `${s.이름}_성적표.jpg`));
@@ -257,15 +249,12 @@ function Report({ headers }) {
           ) : <div style={emptyPreview}>배경을 업로드하세요.</div>}
         </div>
       </div>
-      
-      {/* 💡 하단 진행바 (옵션) */}
+
       {progress.status !== 'idle' && (
         <div style={progressOverlay}>
           <div style={progressBox}>
-            <p>{progress.status === 'processing' ? `학생 성적표 생성 중... (${progress.current} / ${progress.total})` : `파일 압축 중... 잠시만 기다려주세요.`}</p>
-            <div style={progressBarContainer}>
-              <div style={{...progressBar, width: `${(progress.current / progress.total) * 100}%`}}></div>
-            </div>
+            <p>{progress.status === 'processing' ? `학생 성적표 생성 중... (${progress.current} / ${progress.total})` : `압축 파일 생성 중...`}</p>
+            <div style={progressBarContainer}><div style={{...progressBar, width: `${(progress.current / progress.total) * 100}%`}}></div></div>
           </div>
         </div>
       )}
@@ -273,7 +262,7 @@ function Report({ headers }) {
   );
 }
 
-// 스타일 시트
+// 스타일 시트 (생략 - 이전과 동일)
 const resizer = { width: '10px', height: '10px', backgroundColor: '#3b82f6', position: 'absolute', right: '-5px', bottom: '-5px', cursor: 'nwse-resize', borderRadius: '50%' };
 const containerStyle = { padding: '20px', color: '#fff', height: '100vh', backgroundColor:'#1a1c23', overflow:'hidden', position:'relative' };
 const headerSection = { display: 'flex', justifyContent: 'space-between', marginBottom: '20px' };
@@ -297,8 +286,6 @@ const canvasWrapper = { position: 'relative', backgroundSize: '100% 100%' };
 const vGuide = { position: 'absolute', top: 0, bottom: 0, width: '1px', backgroundColor: '#00ff00', zIndex: 10, pointerEvents:'none' };
 const hGuide = { position: 'absolute', left: 0, right: 0, height: '1px', backgroundColor: '#00ff00', zIndex: 10, pointerEvents:'none' };
 const emptyPreview = { color: '#444', marginTop: '150px' };
-
-// 진행바 스타일
 const progressOverlay = { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 };
 const progressBox = { backgroundColor: '#24262d', padding: '30px', borderRadius: '15px', width: '400px', textAlign: 'center' };
 const progressBarContainer = { width: '100%', height: '10px', backgroundColor: '#444', borderRadius: '5px', marginTop: '15px', overflow: 'hidden' };
