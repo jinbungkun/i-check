@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { requestGAS } from '../utils/GoogleAppScript';
-import JSZip from 'jszip'; // npm install jszip
-import { saveAs } from 'file-saver'; // npm install file-saver
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
-// IndexedDB 설정 (배경 이미지 저장용)
+// IndexedDB 설정 (배경 이미지 영구 저장)
 const dbName = "ReportEditorDB";
 const storeName = "assets";
 const initDB = () => {
@@ -20,14 +20,16 @@ const initDB = () => {
 function Report({ headers }) {
   const [fullStudents, setFullStudents] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false); // 압축 중 상태
+  
+  // 💡 진행 상태 관리
+  const [progress, setProgress] = useState({ current: 0, total: 0, status: 'idle' }); 
+  
   const [bgImage, setBgImage] = useState(null);
   const [elements, setElements] = useState([]);
   const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
-  
+  const [targetId, setTargetId] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  const [targetId, setTargetId] = useState(null);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [initialSize, setInitialSize] = useState(0);
   const [initialMouseX, setInitialMouseX] = useState(0);
@@ -78,75 +80,72 @@ function Report({ headers }) {
     setIsLoading(true);
     try {
       const res = await requestGAS({ action: 'getStudents' });
-      if (res && Array.isArray(res)) {
-        const activeStudents = res.filter(s => s.상태 === "재원");
-        setFullStudents(activeStudents);
-        return activeStudents;
+      if (res) {
+        const activeOnly = res.filter(s => s.상태 === "재원");
+        setFullStudents(activeOnly);
+        return activeOnly;
       }
-    } catch (e) {
-      alert("데이터 로드 실패: " + e.message);
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (e) { alert(e.message); }
+    finally { setIsLoading(false); }
     return [];
   };
 
-  // 개별 학생 이미지 생성 함수 (Promise 반환)
   const generateImageBlob = (student, bgImgObj) => {
     return new Promise((resolve) => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       canvas.width = bgImgObj.width;
       canvas.height = bgImgObj.height;
-      
       const ratio = bgImgObj.width / containerRef.current.offsetWidth;
       ctx.drawImage(bgImgObj, 0, 0);
-      
       elements.forEach(el => {
         ctx.font = `bold ${el.fontSize * ratio}px Arial`;
         ctx.fillStyle = el.color;
         ctx.textAlign = "left"; ctx.textBaseline = "top";
         ctx.fillText(student[el.text] || "", el.x * ratio, el.y * ratio);
       });
-      
-      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
+      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.8); // 용량 최적화를 위해 0.8 권장
     });
   };
 
-  // 💡 전체 압축 다운로드 핵심 로직
+  // 💡 [메인 기능] 전체 압축 및 진행률 표시
   const handleZipDownload = async () => {
-    if (!bgImage) return alert("배경 이미지를 먼저 업로드해주세요.");
-    
+    if (!bgImage) return alert("배경 이미지를 업로드해주세요.");
     const studentsToPrint = await loadData();
     if (studentsToPrint.length === 0) return;
 
-    if (!window.confirm(`${studentsToPrint.length}명의 성적표를 압축 파일로 생성하시겠습니까?`)) return;
+    if (!window.confirm(`${studentsToPrint.length}명의 재원생 성적표 압축을 시작합니다.`)) return;
 
-    setIsProcessing(true);
+    setProgress({ current: 0, total: studentsToPrint.length, status: 'processing' });
+
     const zip = new JSZip();
     const bgImgObj = new Image();
     bgImgObj.src = bgImage;
 
     bgImgObj.onload = async () => {
-      try {
-        for (let student of studentsToPrint) {
-          const blob = await generateImageBlob(student, bgImgObj);
-          zip.file(`${student.이름}_성적표.jpg`, blob);
-        }
+      for (let i = 0; i < studentsToPrint.length; i++) {
+        const student = studentsToPrint[i];
+        const blob = await generateImageBlob(student, bgImgObj);
+        zip.file(`${student.이름}_성적표.jpg`, blob);
         
-        const content = await zip.generateAsync({ type: "blob" });
-        saveAs(content, `성적표_전체출력_${new Date().toISOString().slice(0,10)}.zip`);
-        alert("압축 파일 생성이 완료되었습니다!");
-      } catch (err) {
-        console.error(err);
-        alert("압축 도중 오류가 발생했습니다.");
-      } finally {
-        setIsProcessing(false);
+        // 💡 실시간 진행률 업데이트
+        setProgress(prev => ({ ...prev, current: i + 1 }));
       }
+
+      setProgress(prev => ({ ...prev, status: 'zipping' }));
+      
+      const content = await zip.generateAsync({ type: "blob" });
+      
+      // 💡 완료 시 파일명에 날짜 포함하여 자동 다운로드
+      const fileName = `성적표_전체_${new Date().toISOString().slice(0, 10)}.zip`;
+      saveAs(content, fileName);
+      
+      setProgress({ current: 0, total: 0, status: 'idle' });
+      alert("전체 다운로드가 완료되었습니다!");
     };
   };
 
-  // (onMouseDown, onMouseMove, onMouseUp 등 기존 드래그/리사이즈 로직 유지)
+  // 마우스 이벤트 (드래그/리사이즈)
   const onMouseDown = (e, el, type) => {
     e.stopPropagation(); e.preventDefault();
     setTargetId(el.id);
@@ -164,8 +163,7 @@ function Report({ headers }) {
     setElements(prev => {
       if (isResizing) {
         const deltaX = e.clientX - initialMouseX;
-        const newSize = Math.max(10, initialSize + (deltaX * 0.5));
-        return prev.map(el => el.id === targetId ? { ...el, fontSize: newSize } : el);
+        return prev.map(el => el.id === targetId ? { ...el, fontSize: Math.max(10, initialSize + (deltaX * 0.5)) } : el);
       }
       if (isDragging) {
         let newX = (e.clientX - rect.left) - offset.x;
@@ -192,13 +190,17 @@ function Report({ headers }) {
         <div style={{display:'flex', gap:'10px'}}>
            <input type="file" onChange={handleImageUpload} accept="image/*" id="bg-upload" style={{display:'none'}} />
            <label htmlFor="bg-upload" style={topBtn}>📸 배경 변경</label>
+           
+           {/* 💡 버튼에 진행률 표시 */}
            <button 
              onClick={handleZipDownload} 
-             disabled={isProcessing}
-             style={{...topBtn, backgroundColor: isProcessing ? '#9ca3af' : '#f59e0b'}}
+             disabled={progress.status !== 'idle'}
+             style={{...topBtn, backgroundColor: progress.status !== 'idle' ? '#6b7280' : '#f59e0b'}}
            >
-             {isProcessing ? "📁 압축 중..." : "📦 재원생 전체 압축다운"}
+             {progress.status === 'processing' ? `⏳ 생성 중 (${progress.current}/${progress.total})` :
+              progress.status === 'zipping' ? `📦 압축 파일 생성 중...` : `📦 재원생 전체 압축다운`}
            </button>
+
            <button onClick={() => { localStorage.setItem('report_config', JSON.stringify(elements)); alert("💾 저장완료"); }} style={{...topBtn, backgroundColor: '#10b981'}}>💾 설정 저장</button>
         </div>
       </div>
@@ -255,15 +257,27 @@ function Report({ headers }) {
           ) : <div style={emptyPreview}>배경을 업로드하세요.</div>}
         </div>
       </div>
+      
+      {/* 💡 하단 진행바 (옵션) */}
+      {progress.status !== 'idle' && (
+        <div style={progressOverlay}>
+          <div style={progressBox}>
+            <p>{progress.status === 'processing' ? `학생 성적표 생성 중... (${progress.current} / ${progress.total})` : `파일 압축 중... 잠시만 기다려주세요.`}</p>
+            <div style={progressBarContainer}>
+              <div style={{...progressBar, width: `${(progress.current / progress.total) * 100}%`}}></div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-// 스타일 시트 (이전과 동일)
+// 스타일 시트
 const resizer = { width: '10px', height: '10px', backgroundColor: '#3b82f6', position: 'absolute', right: '-5px', bottom: '-5px', cursor: 'nwse-resize', borderRadius: '50%' };
-const containerStyle = { padding: '20px', color: '#fff', height: '100vh', backgroundColor:'#1a1c23', overflow:'hidden' };
+const containerStyle = { padding: '20px', color: '#fff', height: '100vh', backgroundColor:'#1a1c23', overflow:'hidden', position:'relative' };
 const headerSection = { display: 'flex', justifyContent: 'space-between', marginBottom: '20px' };
-const topBtn = { padding: '8px 15px', borderRadius: '8px', color: '#fff', border:'none', cursor:'pointer', fontWeight:'bold', fontSize:'12px' };
+const topBtn = { padding: '8px 15px', borderRadius: '8px', color: '#fff', border:'none', cursor:'pointer', fontWeight:'bold', fontSize:'12px', minWidth:'120px' };
 const editorLayout = { display: 'flex', gap: '20px', height: 'calc(100% - 100px)' };
 const sidePanel = { width: '300px', backgroundColor: '#24262d', padding: '15px', borderRadius: '15px', overflowY: 'auto' };
 const panelTitle = { fontSize: '13px', color: '#3b82f6', borderBottom: '1px solid #333', paddingBottom: '5px' };
@@ -283,5 +297,11 @@ const canvasWrapper = { position: 'relative', backgroundSize: '100% 100%' };
 const vGuide = { position: 'absolute', top: 0, bottom: 0, width: '1px', backgroundColor: '#00ff00', zIndex: 10, pointerEvents:'none' };
 const hGuide = { position: 'absolute', left: 0, right: 0, height: '1px', backgroundColor: '#00ff00', zIndex: 10, pointerEvents:'none' };
 const emptyPreview = { color: '#444', marginTop: '150px' };
+
+// 진행바 스타일
+const progressOverlay = { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100 };
+const progressBox = { backgroundColor: '#24262d', padding: '30px', borderRadius: '15px', width: '400px', textAlign: 'center' };
+const progressBarContainer = { width: '100%', height: '10px', backgroundColor: '#444', borderRadius: '5px', marginTop: '15px', overflow: 'hidden' };
+const progressBar = { height: '100%', backgroundColor: '#3b82f6', transition: 'width 0.3s ease' };
 
 export default Report;
