@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { requestGAS } from '../utils/GoogleAppScript';
+import JSZip from 'jszip'; // npm install jszip
+import { saveAs } from 'file-saver'; // npm install file-saver
 
-// IndexedDB 설정 (이미지 영구 저장을 위함)
+// IndexedDB 설정 (배경 이미지 저장용)
 const dbName = "ReportEditorDB";
 const storeName = "assets";
-
 const initDB = () => {
   return new Promise((resolve) => {
     const request = indexedDB.open(dbName, 1);
@@ -19,12 +20,13 @@ const initDB = () => {
 function Report({ headers }) {
   const [fullStudents, setFullStudents] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false); // 압축 중 상태
   const [bgImage, setBgImage] = useState(null);
   const [elements, setElements] = useState([]);
   const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
   
   const [isDragging, setIsDragging] = useState(false);
-  const [isResizing, setIsResizing] = useState(false); // 리사이즈 상태 복구
+  const [isResizing, setIsResizing] = useState(false);
   const [targetId, setTargetId] = useState(null);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [initialSize, setInitialSize] = useState(0);
@@ -32,14 +34,11 @@ function Report({ headers }) {
   const [guideLines, setGuideLines] = useState({ x: null, y: null });
 
   const containerRef = useRef(null);
-  const SNAP_THRESHOLD = 8; // 자석 강도
+  const SNAP_THRESHOLD = 8;
 
   useEffect(() => {
-    // 1. 배치 설정 불러오기
     const savedConfig = localStorage.getItem('report_config');
     if (savedConfig) setElements(JSON.parse(savedConfig));
-
-    // 2. 저장된 배경 이미지 불러오기 (IndexedDB)
     const loadSavedImage = async () => {
       const db = await initDB();
       const transaction = db.transaction(storeName, "readonly");
@@ -47,20 +46,14 @@ function Report({ headers }) {
       getRequest.onsuccess = (e) => {
         if (e.target.result) {
           const img = new Image();
-          img.onload = () => {
-            setImgSize({ w: img.width, h: img.height });
-            setBgImage(e.target.result);
-          };
+          img.onload = () => { setImgSize({ w: img.width, h: img.height }); setBgImage(e.target.result); };
           img.src = e.target.result;
         }
       };
     };
     loadSavedImage();
-
-    return () => setFullStudents([]);
   }, []);
 
-  // 이미지 업로드 및 DB 저장
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -71,7 +64,6 @@ function Report({ headers }) {
         img.onload = async () => {
           setImgSize({ w: img.width, h: img.height });
           setBgImage(data);
-          // DB에 저장
           const db = await initDB();
           db.transaction(storeName, "readwrite").objectStore(storeName).put(data, "bgImage");
         };
@@ -81,71 +73,109 @@ function Report({ headers }) {
     }
   };
 
-  const loadDataWithConfirm = async () => {
-    if (fullStudents.length > 0) return true;
-    if (!window.confirm("성적표 출력을 위해 전체 학생 데이터를 불러오시겠습니까?")) return false;
-
+  const loadData = async () => {
+    if (fullStudents.length > 0) return fullStudents;
     setIsLoading(true);
     try {
       const res = await requestGAS({ action: 'getStudents' });
       if (res && Array.isArray(res)) {
-        // 💡 필터링: '상태'가 '재원'인 인원만 남김
         const activeStudents = res.filter(s => s.상태 === "재원");
         setFullStudents(activeStudents);
-        return true;
+        return activeStudents;
       }
     } catch (e) {
       alert("데이터 로드 실패: " + e.message);
     } finally {
       setIsLoading(false);
     }
-    return false;
+    return [];
   };
 
+  // 개별 학생 이미지 생성 함수 (Promise 반환)
+  const generateImageBlob = (student, bgImgObj) => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = bgImgObj.width;
+      canvas.height = bgImgObj.height;
+      
+      const ratio = bgImgObj.width / containerRef.current.offsetWidth;
+      ctx.drawImage(bgImgObj, 0, 0);
+      
+      elements.forEach(el => {
+        ctx.font = `bold ${el.fontSize * ratio}px Arial`;
+        ctx.fillStyle = el.color;
+        ctx.textAlign = "left"; ctx.textBaseline = "top";
+        ctx.fillText(student[el.text] || "", el.x * ratio, el.y * ratio);
+      });
+      
+      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.9);
+    });
+  };
+
+  // 💡 전체 압축 다운로드 핵심 로직
+  const handleZipDownload = async () => {
+    if (!bgImage) return alert("배경 이미지를 먼저 업로드해주세요.");
+    
+    const studentsToPrint = await loadData();
+    if (studentsToPrint.length === 0) return;
+
+    if (!window.confirm(`${studentsToPrint.length}명의 성적표를 압축 파일로 생성하시겠습니까?`)) return;
+
+    setIsProcessing(true);
+    const zip = new JSZip();
+    const bgImgObj = new Image();
+    bgImgObj.src = bgImage;
+
+    bgImgObj.onload = async () => {
+      try {
+        for (let student of studentsToPrint) {
+          const blob = await generateImageBlob(student, bgImgObj);
+          zip.file(`${student.이름}_성적표.jpg`, blob);
+        }
+        
+        const content = await zip.generateAsync({ type: "blob" });
+        saveAs(content, `성적표_전체출력_${new Date().toISOString().slice(0,10)}.zip`);
+        alert("압축 파일 생성이 완료되었습니다!");
+      } catch (err) {
+        console.error(err);
+        alert("압축 도중 오류가 발생했습니다.");
+      } finally {
+        setIsProcessing(false);
+      }
+    };
+  };
+
+  // (onMouseDown, onMouseMove, onMouseUp 등 기존 드래그/리사이즈 로직 유지)
   const onMouseDown = (e, el, type) => {
-    e.stopPropagation();
-    e.preventDefault();
+    e.stopPropagation(); e.preventDefault();
     setTargetId(el.id);
     const rect = containerRef.current.getBoundingClientRect();
-
     if (type === 'resize') {
-      setIsResizing(true);
-      setInitialSize(el.fontSize);
-      setInitialMouseX(e.clientX);
+      setIsResizing(true); setInitialSize(el.fontSize); setInitialMouseX(e.clientX);
     } else {
-      setIsDragging(true);
-      setOffset({ x: (e.clientX - rect.left) - el.x, y: (e.clientY - rect.top) - el.y });
+      setIsDragging(true); setOffset({ x: (e.clientX - rect.left) - el.x, y: (e.clientY - rect.top) - el.y });
     }
   };
 
   const onMouseMove = (e) => {
     if ((!isDragging && !isResizing) || !targetId) return;
     const rect = containerRef.current.getBoundingClientRect();
-
     setElements(prev => {
-      const target = prev.find(el => el.id === targetId);
-      if (!target) return prev;
-
       if (isResizing) {
         const deltaX = e.clientX - initialMouseX;
         const newSize = Math.max(10, initialSize + (deltaX * 0.5));
         return prev.map(el => el.id === targetId ? { ...el, fontSize: newSize } : el);
       }
-
       if (isDragging) {
         let newX = (e.clientX - rect.left) - offset.x;
         let newY = (e.clientY - rect.top) - offset.y;
         let snapX = null, snapY = null;
-
-        // 💡 스마트 스냅 (축 정렬 + 간격 정렬 보조)
         prev.forEach(other => {
           if (other.id === targetId) return;
-          // 축 정렬
           if (Math.abs(newX - other.x) < SNAP_THRESHOLD) { newX = other.x; snapX = newX; }
           if (Math.abs(newY - other.y) < SNAP_THRESHOLD) { newY = other.y; snapY = newY; }
-          // 간격 스냅 보정 (동일 간격 유지를 위해 축이 맞으면 가이드라인 표시)
         });
-
         setGuideLines({ x: snapX, y: snapY });
         return prev.map(el => el.id === targetId ? { ...el, x: newX, y: newY } : el);
       }
@@ -153,34 +183,7 @@ function Report({ headers }) {
     });
   };
 
-  const onMouseUp = () => {
-    setIsDragging(false);
-    setIsResizing(false);
-    setTargetId(null);
-    setGuideLines({ x: null, y: null });
-  };
-
-  const downloadReport = (student) => {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const img = new Image();
-    img.src = bgImage;
-    img.onload = () => {
-      canvas.width = img.width; canvas.height = img.height;
-      const ratio = img.width / containerRef.current.offsetWidth;
-      ctx.drawImage(img, 0, 0);
-      elements.forEach(el => {
-        ctx.font = `bold ${el.fontSize * ratio}px Arial`;
-        ctx.fillStyle = el.color;
-        ctx.textAlign = "left"; ctx.textBaseline = "top";
-        ctx.fillText(student[el.text] || "", el.x * ratio, el.y * ratio);
-      });
-      const link = document.createElement('a');
-      link.download = `${student.이름}_성적표.jpg`;
-      link.href = canvas.toDataURL('image/jpeg', 0.9);
-      link.click();
-    };
-  };
+  const onMouseUp = () => { setIsDragging(false); setIsResizing(false); setTargetId(null); setGuideLines({ x: null, y: null }); };
 
   return (
     <div style={containerStyle} onMouseMove={onMouseMove} onMouseUp={onMouseUp}>
@@ -189,18 +192,14 @@ function Report({ headers }) {
         <div style={{display:'flex', gap:'10px'}}>
            <input type="file" onChange={handleImageUpload} accept="image/*" id="bg-upload" style={{display:'none'}} />
            <label htmlFor="bg-upload" style={topBtn}>📸 배경 변경</label>
-           <button onClick={async () => {
-             const loaded = await loadDataWithConfirm();
-             if (loaded) {
-               if (window.confirm(`${fullStudents.length}명(재원생 전용) 다운로드를 시작할까요?`)) {
-                 fullStudents.forEach((s, i) => setTimeout(() => downloadReport(s), i * 600));
-               }
-             }
-           }} style={{...topBtn, backgroundColor: '#f59e0b'}}>🖨️ 재원생 전체출력</button>
-           <button onClick={() => {
-             localStorage.setItem('report_config', JSON.stringify(elements));
-             alert("💾 배치가 저장되었습니다.");
-           }} style={{...topBtn, backgroundColor: '#10b981'}}>💾 설정 저장</button>
+           <button 
+             onClick={handleZipDownload} 
+             disabled={isProcessing}
+             style={{...topBtn, backgroundColor: isProcessing ? '#9ca3af' : '#f59e0b'}}
+           >
+             {isProcessing ? "📁 압축 중..." : "📦 재원생 전체 압축다운"}
+           </button>
+           <button onClick={() => { localStorage.setItem('report_config', JSON.stringify(elements)); alert("💾 저장완료"); }} style={{...topBtn, backgroundColor: '#10b981'}}>💾 설정 저장</button>
         </div>
       </div>
 
@@ -225,9 +224,11 @@ function Report({ headers }) {
 
           <h4 style={{...panelTitle, marginTop: '25px'}}>3. 재원생 명단 ({fullStudents.length})</h4>
           <div style={studentList}>
-            {fullStudents.length === 0 ? <button onClick={loadDataWithConfirm} style={loadBtn}>명단 불러오기</button> :
+            {isLoading ? <p>불러오는 중...</p> : fullStudents.length === 0 ? <button onClick={loadData} style={loadBtn}>명단 미리보기</button> :
              fullStudents.map(s => (
-               <div key={s.ID} style={studentItem}><span>{s.이름}</span><button onClick={() => downloadReport(s)} style={printBtn}>출력</button></div>
+               <div key={s.ID} style={studentItem}><span>{s.이름}</span><button onClick={() => {
+                 const img = new Image(); img.src = bgImage; img.onload = () => generateImageBlob(s, img).then(blob => saveAs(blob, `${s.이름}_성적표.jpg`));
+               }} style={printBtn}>출력</button></div>
              ))}
           </div>
         </div>
@@ -247,7 +248,6 @@ function Report({ headers }) {
                   }}
                 >
                   {el.text}
-                  {/* 💡 다시 추가된 리사이즈 핸들 */}
                   <div onMouseDown={(e) => onMouseDown(e, el, 'resize')} style={resizer} />
                 </div>
               ))}
@@ -259,7 +259,7 @@ function Report({ headers }) {
   );
 }
 
-/** 🎨 스타일 (추가/수정된 부분) **/
+// 스타일 시트 (이전과 동일)
 const resizer = { width: '10px', height: '10px', backgroundColor: '#3b82f6', position: 'absolute', right: '-5px', bottom: '-5px', cursor: 'nwse-resize', borderRadius: '50%' };
 const containerStyle = { padding: '20px', color: '#fff', height: '100vh', backgroundColor:'#1a1c23', overflow:'hidden' };
 const headerSection = { display: 'flex', justifyContent: 'space-between', marginBottom: '20px' };
@@ -280,8 +280,8 @@ const printBtn = { backgroundColor: '#10b981', color: '#fff', border: 'none', pa
 const loadBtn = { width: '100%', padding: '10px', backgroundColor: '#4b5563', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' };
 const previewArea = { flex: 1, backgroundColor: '#111', borderRadius: '15px', padding: '20px', overflow: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' };
 const canvasWrapper = { position: 'relative', backgroundSize: '100% 100%' };
-const vGuide = { position: 'absolute', top: 0, bottom: 0, width: '1px', backgroundColor: '#00ff00', zIndex: 10 };
-const hGuide = { position: 'absolute', left: 0, right: 0, height: '1px', backgroundColor: '#00ff00', zIndex: 10 };
+const vGuide = { position: 'absolute', top: 0, bottom: 0, width: '1px', backgroundColor: '#00ff00', zIndex: 10, pointerEvents:'none' };
+const hGuide = { position: 'absolute', left: 0, right: 0, height: '1px', backgroundColor: '#00ff00', zIndex: 10, pointerEvents:'none' };
 const emptyPreview = { color: '#444', marginTop: '150px' };
 
 export default Report;
