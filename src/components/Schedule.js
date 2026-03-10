@@ -102,9 +102,12 @@ function ScheduleView({ students = [] }) {
     const safeStudents = Array.isArray(students) ? students : [];
 
     // 1. 해당 요일에 수업이 있는 학생만 필터링
-    const dayStudents = safeStudents.filter(s => {
+  const dayStudents = safeStudents.filter(s => {
       const schedule = s?.수업스케줄 || s?.["수업 스케줄"] || "";
-      return schedule.includes(targetDay);
+      // ✨ 추가된 조건: 상태가 '재원'인 경우만 포함 (비어있거나 다른 값이면 제외)
+      const isActive = s?.상태 === "재원"; 
+      
+      return schedule.includes(targetDay) && isActive;
     });
 
     // 2. 보강/체험 데이터 필터링
