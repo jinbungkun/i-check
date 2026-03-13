@@ -18,7 +18,7 @@ const initDB = () => {
 
 function Report({ headers }) {
   const [fullStudents, setFullStudents] = useState([]);
-  const [selectedStudent, setSelectedStudent] = useState(null); // 미리보기용 학생
+  const [selectedStudent, setSelectedStudent] = useState(null); 
   const [isLoading, setIsLoading] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, status: 'idle' }); 
   const [bgImage, setBgImage] = useState(null);
@@ -63,7 +63,7 @@ function Report({ headers }) {
       if (Array.isArray(rawData)) {
         const activeOnly = rawData.filter(student => student.상태 === "재원");
         setFullStudents(activeOnly);
-        if(activeOnly.length > 0) setSelectedStudent(activeOnly[0]); // 첫 번째 학생 자동 선택
+        if(activeOnly.length > 0) setSelectedStudent(activeOnly[0]); 
         return activeOnly;
       }
       return [];
@@ -91,7 +91,6 @@ function Report({ headers }) {
     }
   };
 
-  // 실제 이미지 파일 생성 로직 (고해상도 대응)
   const generateImageBlob = (student, bgImgObj) => {
     return new Promise((resolve) => {
       const canvas = document.createElement('canvas');
@@ -161,7 +160,6 @@ function Report({ headers }) {
       }
       let newX = (e.clientX - rect.left) - offset.x;
       let newY = (e.clientY - rect.top) - offset.y;
-      // 스냅 가이드라인 로직 (생략 - 이전과 동일)
       return { ...el, x: newX, y: newY };
     }));
   };
@@ -181,7 +179,6 @@ function Report({ headers }) {
       </div>
 
       <div style={editorLayout}>
-        {/* 사이드바: 항목 및 명단 */}
         <div style={sidePanel}>
           <h4 style={panelTitle}>1. 항목 추가</h4>
           <div style={tagBox}>
@@ -221,7 +218,6 @@ function Report({ headers }) {
           </div>
         </div>
 
-        {/* 메인 에디터 공간 */}
         <div style={previewArea}>
           {bgImage ? (
             <div ref={containerRef} style={{...canvasWrapper, backgroundImage: `url(${bgImage})`, aspectRatio: `${imgSize.w} / ${imgSize.h}`, width: '100%', maxWidth: '800px'}}>
@@ -235,7 +231,6 @@ function Report({ headers }) {
                     transform: el.align === 'center' ? 'translateX(-50%)' : el.align === 'right' ? 'translateX(-100%)' : 'none'
                   }}
                 >
-                  {/* 💡 핵심: 선택된 학생이 있으면 실제 데이터를, 없으면 태그명을 보여줌 */}
                   {selectedStudent ? (selectedStudent[el.text] || el.text) : el.text}
                   <div onMouseDown={(e) => onMouseDown(e, el, 'resize')} style={resizer} />
                 </div>
@@ -245,7 +240,6 @@ function Report({ headers }) {
         </div>
       </div>
 
-      {/* 진행바 오버레이 */}
       {progress.status !== 'idle' && (
         <div style={progressOverlay}>
           <div style={progressBox}>
@@ -259,8 +253,14 @@ function Report({ headers }) {
   );
 }
 
-// 추가/수정된 스타일
-const selectInput = { backgroundColor:'#1a1c23', color:'#fff', border:'1px solid #444', borderRadius:'4px', fontSize:'11px' };
+// 빌드 에러의 원인이었던 스타일 정의 추가
+const elementList = { 
+  display: 'flex', 
+  flexDirection: 'column', 
+  gap: '8px' 
+};
+
+const selectInput = { backgroundColor:'#1a1c23', color:'#fff', border:'1px solid #444', borderRadius:'4px', fontSize:'11px', padding: '2px' };
 const resizer = { width: '10px', height: '10px', backgroundColor: '#3b82f6', position: 'absolute', right: '-5px', bottom: '-5px', cursor: 'nwse-resize', borderRadius: '50%' };
 const containerStyle = { padding: '20px', color: '#fff', height: '100vh', backgroundColor:'#1a1c23', overflow:'hidden', position:'relative' };
 const headerSection = { display: 'flex', justifyContent: 'space-between', marginBottom: '20px' };
