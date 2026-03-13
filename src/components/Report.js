@@ -101,24 +101,22 @@ function Report({ headers }) {
       canvas.width = bgImgObj.width;
       canvas.height = bgImgObj.height;
       
-      // 화면 컨테이너 대비 실제 이미지의 배율
       const ratio = bgImgObj.width / containerRef.current.offsetWidth;
       
       ctx.drawImage(bgImgObj, 0, 0);
       
       elements.forEach(el => {
         const fontSize = el.fontSize * ratio;
-        // 폰트 설정 (화면과 동일하게 bold 적용)
         ctx.font = `bold ${fontSize}px "Nanum Gothic", sans-serif`;
         ctx.fillStyle = el.color;
         
-        // 💡 핵심 1: 텍스트 기준점을 화면과 동일하게 'top'으로 설정
+        // 1. 캔버스 기준점 설정
         ctx.textBaseline = "top";
         
         const textValue = String(student[el.text] || "");
         const textWidth = ctx.measureText(textValue).width;
         
-        // 💡 핵심 2: X좌표 보정 (정렬 방식에 따른 정확한 계산)
+        // 2. X좌표 계산 (화면과 동일하게)
         let drawX = el.x * ratio;
         let drawY = el.y * ratio;
 
@@ -128,10 +126,11 @@ function Report({ headers }) {
           drawX = drawX - textWidth;
         }
 
-        // 💡 핵심 3: Y좌표 미세 보정
-        // 브라우저 렌더링 특성상 발생하는 상단 여백(ascent) 오차를 줄이기 위해 
-        // 화면과 동일한 위치에 글자를 그립니다.
-        ctx.fillText(textValue, drawX, drawY);
+        // 💡 3. Y좌표 미세 보정 (좌상단 쏠림 방지)
+        // 브라우저 div 렌더링과 일치시키기 위해 폰트 크기의 12%만큼 아래로 내립니다.
+        const yOffset = fontSize * 0.12; 
+        
+        ctx.fillText(textValue, drawX, drawY + yOffset);
       });
       
       canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 1.0);
@@ -256,16 +255,15 @@ function Report({ headers }) {
         <div style={previewArea}>
           {bgImage ? (
             <div 
-              ref={containerRef} 
-              style={{
-                ...canvasWrapper, 
-                backgroundImage: `url(${bgImage})`, 
-                width: imgSize.w > imgSize.h ? '100%' : 'auto', // 가로형은 꽉 채우고, 세로형은 자동
-                height: imgSize.h >= imgSize.w ? '100%' : 'auto', // 세로형은 높이 꽉 채우기
-                aspectRatio: `${imgSize.w} / ${imgSize.h}`,
-                maxHeight: '100%',
-                maxWidth: '100%'
-              }}>
+                ref={containerRef} 
+                style={{
+                  ...canvasWrapper, 
+                  backgroundImage: `url(${bgImage})`, 
+                  width: imgSize.w > imgSize.h ? '100%' : 'auto', 
+                  height: imgSize.h >= imgSize.w ? '100%' : 'auto', 
+                  aspectRatio: `${imgSize.w} / ${imgSize.h}`,
+                  backgroundSize: '100% 100%', // contain 대신 100% 100% 사용 (컨테이너와 이미지 일치)
+                }}>
               
               {guideLines.x !== null && <div style={{...vGuide, left: guideLines.x}} />}
               {guideLines.y !== null && <div style={{...hGuide, top: guideLines.y}} />}
