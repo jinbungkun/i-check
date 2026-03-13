@@ -110,27 +110,20 @@ function Report({ headers }) {
         ctx.font = `bold ${fontSize}px "Nanum Gothic", sans-serif`;
         ctx.fillStyle = el.color;
         
-        // 1. 캔버스 기준점 설정
-        ctx.textBaseline = "top";
+        // 💡 핵심 1: 텍스트 기준점을 화면과 일치시키기 위해 alphabetic 사용
+        ctx.textBaseline = "alphabetic";
         
         const textValue = String(student[el.text] || "");
         const textWidth = ctx.measureText(textValue).width;
         
-        // 2. X좌표 계산 (화면과 동일하게)
         let drawX = el.x * ratio;
-        let drawY = el.y * ratio;
+        // 💡 핵심 2: HTML의 상단 기준좌표를 캔버스의 베이스라인 좌표로 변환 (+82% 보정)
+        let drawY = (el.y * ratio) + (fontSize * 0.82); 
 
-        if (el.align === "center") {
-          drawX = drawX - (textWidth / 2);
-        } else if (el.align === "right") {
-          drawX = drawX - textWidth;
-        }
+        if (el.align === "center") drawX = drawX - (textWidth / 2);
+        else if (el.align === "right") drawX = drawX - textWidth;
 
-        // 💡 3. Y좌표 미세 보정 (좌상단 쏠림 방지)
-        // 브라우저 div 렌더링과 일치시키기 위해 폰트 크기의 12%만큼 아래로 내립니다.
-        const yOffset = fontSize * 0.12; 
-        
-        ctx.fillText(textValue, drawX, drawY + yOffset);
+        ctx.fillText(textValue, drawX, drawY);
       });
       
       canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 1.0);
@@ -189,6 +182,7 @@ function Report({ headers }) {
       let snapX = null, snapY = null;
       prev.forEach(other => {
         if (other.id === targetId) return;
+        // 💡 Snap 기능: 임계값 이내면 좌표를 고정
         if (Math.abs(newX - other.x) < SNAP_THRESHOLD) { newX = other.x; snapX = newX; }
         if (Math.abs(newY - other.y) < SNAP_THRESHOLD) { newY = other.y; snapY = newY; }
       });
@@ -255,15 +249,16 @@ function Report({ headers }) {
         <div style={previewArea}>
           {bgImage ? (
             <div 
-                ref={containerRef} 
-                style={{
-                  ...canvasWrapper, 
-                  backgroundImage: `url(${bgImage})`, 
-                  width: imgSize.w > imgSize.h ? '100%' : 'auto', 
-                  height: imgSize.h >= imgSize.w ? '100%' : 'auto', 
-                  aspectRatio: `${imgSize.w} / ${imgSize.h}`,
-                  backgroundSize: '100% 100%', // contain 대신 100% 100% 사용 (컨테이너와 이미지 일치)
-                }}>
+              ref={containerRef} 
+              style={{
+                ...canvasWrapper, 
+                backgroundImage: `url(${bgImage})`, 
+                // 💡 미리보기 찌그러짐 방지: 원본 비율을 유지하며 컨테이너에 맞춤
+                width: imgSize.w > imgSize.h ? '100%' : 'auto', 
+                height: imgSize.h >= imgSize.w ? '100%' : 'auto', 
+                aspectRatio: `${imgSize.w} / ${imgSize.h}`,
+                backgroundSize: '100% 100%', 
+              }}>
               
               {guideLines.x !== null && <div style={{...vGuide, left: guideLines.x}} />}
               {guideLines.y !== null && <div style={{...hGuide, top: guideLines.y}} />}
@@ -273,6 +268,8 @@ function Report({ headers }) {
                   style={{
                     position: 'absolute', left: el.x, top: el.y, fontSize: el.fontSize, color: el.color,
                     fontWeight: 'bold', cursor: 'move', userSelect: 'none', whiteSpace: 'nowrap',
+                    lineHeight: 1, // 💡 위치 일치화의 핵심: 불필요한 행간 제거
+                    padding: 0, 
                     transform: el.align === 'center' ? 'translateX(-50%)' : el.align === 'right' ? 'translateX(-100%)' : 'none',
                     border: targetId === el.id ? '2px solid #3b82f6' : '1px dashed rgba(255,255,255,0.2)',
                   }}
@@ -299,7 +296,6 @@ function Report({ headers }) {
   );
 }
 
-// 스타일 정의 (이전과 동일하지만 잘림 방지를 위해 수정)
 const elementList = { display: 'flex', flexDirection: 'column', gap: '8px' };
 const selectInput = { backgroundColor:'#1a1c23', color:'#fff', border:'1px solid #444', borderRadius:'4px', fontSize:'11px', padding: '2px' };
 const resizer = { width: '10px', height: '10px', backgroundColor: '#3b82f6', position: 'absolute', right: '-5px', bottom: '-5px', cursor: 'nwse-resize', borderRadius: '50%' };
@@ -318,7 +314,7 @@ const studentList = { marginTop: '10px', display:'flex', flexDirection:'column',
 const studentItem = { padding: '8px', borderRadius: '6px', cursor: 'pointer', borderBottom: '1px solid #333', fontSize:'13px' };
 const loadBtn = { width: '100%', padding: '10px', backgroundColor: '#4b5563', color: '#fff', border: 'none', borderRadius: '8px' };
 const previewArea = { flex: 1, backgroundColor: '#111', borderRadius: '15px', padding: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow:'hidden' };
-const canvasWrapper = { position: 'relative', backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', boxShadow: '0 0 30px rgba(0,0,0,0.5)' };
+const canvasWrapper = { position: 'relative', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', boxShadow: '0 0 30px rgba(0,0,0,0.5)' };
 const vGuide = { position: 'absolute', top: 0, bottom: 0, width: '1px', backgroundColor: '#00ff00', zIndex: 10, pointerEvents:'none' };
 const hGuide = { position: 'absolute', left: 0, right: 0, height: '1px', backgroundColor: '#00ff00', zIndex: 10, pointerEvents:'none' };
 const emptyPreview = { color: '#444', fontSize: '18px' };
