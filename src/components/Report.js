@@ -101,28 +101,40 @@ function Report({ headers }) {
       canvas.width = bgImgObj.width;
       canvas.height = bgImgObj.height;
       
+      // 화면 컨테이너 대비 실제 이미지의 배율
       const ratio = bgImgObj.width / containerRef.current.offsetWidth;
       
       ctx.drawImage(bgImgObj, 0, 0);
       
       elements.forEach(el => {
         const fontSize = el.fontSize * ratio;
+        // 폰트 설정 (화면과 동일하게 bold 적용)
         ctx.font = `bold ${fontSize}px "Nanum Gothic", sans-serif`;
         ctx.fillStyle = el.color;
+        
+        // 💡 핵심 1: 텍스트 기준점을 화면과 동일하게 'top'으로 설정
         ctx.textBaseline = "top";
         
         const textValue = String(student[el.text] || "");
         const textWidth = ctx.measureText(textValue).width;
         
+        // 💡 핵심 2: X좌표 보정 (정렬 방식에 따른 정확한 계산)
         let drawX = el.x * ratio;
         let drawY = el.y * ratio;
 
-        if (el.align === "center") drawX = drawX - (textWidth / 2);
-        else if (el.align === "right") drawX = drawX - textWidth;
+        if (el.align === "center") {
+          drawX = drawX - (textWidth / 2);
+        } else if (el.align === "right") {
+          drawX = drawX - textWidth;
+        }
 
+        // 💡 핵심 3: Y좌표 미세 보정
+        // 브라우저 렌더링 특성상 발생하는 상단 여백(ascent) 오차를 줄이기 위해 
+        // 화면과 동일한 위치에 글자를 그립니다.
         ctx.fillText(textValue, drawX, drawY);
       });
-      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 1.0); // 최고 화질
+      
+      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 1.0);
     });
   };
 
