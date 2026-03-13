@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { fabric } from 'fabric'; // fabric 라이브러리 임포트
+import * as fabric from 'fabric'; // fabric 라이브러리 임포트
 import { requestGAS } from '../utils/GoogleAppScript';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
