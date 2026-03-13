@@ -46,7 +46,10 @@ function Report({ headers }) {
       getRequest.onsuccess = (e) => {
         if (e.target.result) {
           const img = new Image();
-          img.onload = () => { setImgSize({ w: img.width, h: img.height }); setBgImage(e.target.result); };
+          img.onload = () => { 
+            setImgSize({ w: img.width, h: img.height }); 
+            setBgImage(e.target.result); 
+          };
           img.src = e.target.result;
         }
       };
@@ -91,7 +94,6 @@ function Report({ headers }) {
     }
   };
 
-  // 핵심 수정: 출력 결과물의 위치 불일치 해결
   const generateImageBlob = (student, bgImgObj) => {
     return new Promise((resolve) => {
       const canvas = document.createElement('canvas');
@@ -99,7 +101,6 @@ function Report({ headers }) {
       canvas.width = bgImgObj.width;
       canvas.height = bgImgObj.height;
       
-      // 실제 원본 이미지와 에디터 화면의 비율 계산
       const ratio = bgImgObj.width / containerRef.current.offsetWidth;
       
       ctx.drawImage(bgImgObj, 0, 0);
@@ -116,16 +117,12 @@ function Report({ headers }) {
         let drawX = el.x * ratio;
         let drawY = el.y * ratio;
 
-        // 미리보기의 transform(translateX) 로직을 캔버스 좌표에 그대로 적용
-        if (el.align === "center") {
-          drawX = drawX - (textWidth / 2);
-        } else if (el.align === "right") {
-          drawX = drawX - textWidth;
-        }
+        if (el.align === "center") drawX = drawX - (textWidth / 2);
+        else if (el.align === "right") drawX = drawX - textWidth;
 
         ctx.fillText(textValue, drawX, drawY);
       });
-      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.95);
+      canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 1.0); // 최고 화질
     });
   };
 
@@ -166,7 +163,6 @@ function Report({ headers }) {
     }
   };
 
-  // 핵심 수정: Snap 기능 복구
   const onMouseMove = (e) => {
     if ((!isDragging && !isResizing) || !targetId) return;
     const rect = containerRef.current.getBoundingClientRect();
@@ -191,15 +187,8 @@ function Report({ headers }) {
     });
   };
 
-  const onMouseUp = () => {
-    setIsDragging(false);
-    setIsResizing(false);
-    setTargetId(null);
-    setGuideLines({ x: null, y: null });
-  };
-
   return (
-    <div style={containerStyle} onMouseMove={onMouseMove} onMouseUp={onMouseUp}>
+    <div style={containerStyle} onMouseMove={onMouseMove} onMouseUp={() => {setIsDragging(false); setIsResizing(false); setTargetId(null); setGuideLines({x:null, y:null});}}>
       <div style={headerSection}>
         <h2 style={{color: '#3b82f6', margin:0}}>성적표 에디터 Pro 💎</h2>
         <div style={{display:'flex', gap:'10px'}}>
@@ -259,13 +248,13 @@ function Report({ headers }) {
               style={{
                 ...canvasWrapper, 
                 backgroundImage: `url(${bgImage})`, 
-                aspectRatio: `${imgSize.w} / ${imgSize.h}`, 
-                width: '100%', 
-                maxWidth: 'calc(100vh * (' + imgSize.w + '/' + imgSize.h + '))', // 잘림 방지 핵심: 높이에 맞춘 폭 제한
-                maxHeight: '100%'
+                width: imgSize.w > imgSize.h ? '100%' : 'auto', // 가로형은 꽉 채우고, 세로형은 자동
+                height: imgSize.h >= imgSize.w ? '100%' : 'auto', // 세로형은 높이 꽉 채우기
+                aspectRatio: `${imgSize.w} / ${imgSize.h}`,
+                maxHeight: '100%',
+                maxWidth: '100%'
               }}>
               
-              {/* Snap 가이드 라인 */}
               {guideLines.x !== null && <div style={{...vGuide, left: guideLines.x}} />}
               {guideLines.y !== null && <div style={{...hGuide, top: guideLines.y}} />}
 
@@ -274,9 +263,8 @@ function Report({ headers }) {
                   style={{
                     position: 'absolute', left: el.x, top: el.y, fontSize: el.fontSize, color: el.color,
                     fontWeight: 'bold', cursor: 'move', userSelect: 'none', whiteSpace: 'nowrap',
-                    border: targetId === el.id ? '2px solid #3b82f6' : '1px dashed rgba(255,255,255,0.2)',
                     transform: el.align === 'center' ? 'translateX(-50%)' : el.align === 'right' ? 'translateX(-100%)' : 'none',
-                    backgroundColor: 'rgba(255,255,255,0.1)', padding: '2px'
+                    border: targetId === el.id ? '2px solid #3b82f6' : '1px dashed rgba(255,255,255,0.2)',
                   }}
                 >
                   {selectedStudent ? (selectedStudent[el.text] || el.text) : el.text}
@@ -301,7 +289,7 @@ function Report({ headers }) {
   );
 }
 
-// 스타일 정의
+// 스타일 정의 (이전과 동일하지만 잘림 방지를 위해 수정)
 const elementList = { display: 'flex', flexDirection: 'column', gap: '8px' };
 const selectInput = { backgroundColor:'#1a1c23', color:'#fff', border:'1px solid #444', borderRadius:'4px', fontSize:'11px', padding: '2px' };
 const resizer = { width: '10px', height: '10px', backgroundColor: '#3b82f6', position: 'absolute', right: '-5px', bottom: '-5px', cursor: 'nwse-resize', borderRadius: '50%' };
@@ -320,7 +308,7 @@ const studentList = { marginTop: '10px', display:'flex', flexDirection:'column',
 const studentItem = { padding: '8px', borderRadius: '6px', cursor: 'pointer', borderBottom: '1px solid #333', fontSize:'13px' };
 const loadBtn = { width: '100%', padding: '10px', backgroundColor: '#4b5563', color: '#fff', border: 'none', borderRadius: '8px' };
 const previewArea = { flex: 1, backgroundColor: '#111', borderRadius: '15px', padding: '20px', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow:'hidden' };
-const canvasWrapper = { position: 'relative', backgroundSize: '100% 100%', boxShadow: '0 0 30px rgba(0,0,0,0.5)', backgroundRepeat: 'no-repeat' };
+const canvasWrapper = { position: 'relative', backgroundSize: 'contain', backgroundPosition: 'center', backgroundRepeat: 'no-repeat', boxShadow: '0 0 30px rgba(0,0,0,0.5)' };
 const vGuide = { position: 'absolute', top: 0, bottom: 0, width: '1px', backgroundColor: '#00ff00', zIndex: 10, pointerEvents:'none' };
 const hGuide = { position: 'absolute', left: 0, right: 0, height: '1px', backgroundColor: '#00ff00', zIndex: 10, pointerEvents:'none' };
 const emptyPreview = { color: '#444', fontSize: '18px' };
