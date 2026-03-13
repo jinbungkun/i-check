@@ -7,15 +7,17 @@ function Report({ headers }) {
   const [fullStudents, setFullStudents] = useState([]);
   const [bgImage, setBgImage] = useState(null);
   const [imgSize, setImgSize] = useState({ w: 800, h: 600 });
-  const [elements, setElements] = useState([]); // {id, text, x, y, fontSize, color}
+  const [elements, setElements] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [progress, setProgress] = useState({ current: 0, total: 0, status: 'idle' });
   
   const svgRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [snapGuide, setSnapGuide] = useState({ x: null, y: null });
 
-  // 1. 설정 불러오기
+  const SNAP_THRESHOLD = 15; // 자석 강도 (픽셀 단위)
+
   useEffect(() => {
     const saved = localStorage.getItem('svg_report_config');
     if (saved) {
@@ -35,7 +37,7 @@ function Report({ headers }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedId]);
 
-  // 2. 배경 설정 및 저장
+  // 배경 업로드
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -54,10 +56,10 @@ function Report({ headers }) {
   const saveConfig = () => {
     const data = { elements, bgImage, imgSize };
     localStorage.setItem('svg_report_config', JSON.stringify(data));
-    alert("💾 레이아웃이 저장되었습니다.");
+    alert("💾 모든 설정이 저장되었습니다.");
   };
 
-  // 3. 드래그 로직 (SVG 좌표 기준)
+  // 드래그 및 Snap 로직
   const onMouseDown = (e, el) => {
     setSelectedId(el.id);
     setIsDragging(true);
@@ -73,20 +75,53 @@ function Report({ headers }) {
     if (!isDragging || !selectedId) return;
     const rect = svgRef.current.getBoundingClientRect();
     const scale = imgSize.w / rect.width;
-    const newX = (e.clientX - rect.left) * scale - dragOffset.x;
-    const newY = (e.clientY - rect.top) * scale - dragOffset.y;
+    
+    let newX = (e.clientX - rect.left) * scale - dragOffset.x;
+    let newY = (e.clientY - rect.top) * scale - dragOffset.y;
 
+    // 1. Snap (자석) 기능
+    let snappedX = null;
+    let snappedY = null;
+
+    elements.forEach(other => {
+      if (other.id === selectedId) return;
+      // X축 정렬
+      if (Math.abs(newX - other.x) < SNAP_THRESHOLD) {
+        newX = other.x;
+        snappedX = newX;
+      }
+      // Y축 정렬
+      if (Math.abs(newY - other.y) < SNAP_THRESHOLD) {
+        newY = other.y;
+        snappedY = newY;
+      }
+    });
+
+    setSnapGuide({ x: snappedX, y: snappedY });
     setElements(prev => prev.map(el => 
       el.id === selectedId ? { ...el, x: newX, y: newY } : el
     ));
   };
 
-  // 4. 고화질 이미지 변환 및 압축
+  // 3. 휠로 사이즈 조절
+  const onWheel = (e, id) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 2 : -2;
+    setElements(prev => prev.map(el => 
+      el.id === id ? { ...el, fontSize: Math.max(10, el.fontSize + delta) } : el
+    ));
+  };
+
+  // 상세 설정 업데이트 함수
+  const updateElement = (id, field, value) => {
+    setElements(prev => prev.map(el => el.id === id ? { ...el, [field]: value } : el));
+  };
+
+  // 다운로드 로직 (이전과 동일하되 시각적 데이터 보강)
   const handleZipDownload = async () => {
     if (!bgImage) return alert("배경을 설정해주세요.");
     const res = await requestGAS({ action: 'getStudents' });
     const students = (res.data || res).filter(s => s.상태 === "재원");
-    
     setProgress({ current: 0, total: students.length, status: 'processing' });
     const zip = new JSZip();
 
@@ -109,39 +144,32 @@ function Report({ headers }) {
       canvas.height = imgSize.h;
       const ctx = canvas.getContext('2d');
       const img = new Image();
-      
-      // SVG를 이미지화하여 캔버스에 그리기
       const svgData = new XMLSerializer().serializeToString(svgRef.current);
-      // 텍스트 치환 (실제 데이터로)
       let studentSvg = svgData;
       elements.forEach(el => {
         const val = String(student[el.text] || el.text);
         studentSvg = studentSvg.replace(`>${el.text}</text>`, `>${val}</text>`);
       });
-
       const svgBlob = new Blob([studentSvg], { type: 'image/svg+xml;charset=utf-8' });
       const url = URL.createObjectURL(svgBlob);
-      
       img.onload = () => {
         ctx.drawImage(img, 0, 0);
         URL.revokeObjectURL(url);
-        canvas.toBlob(resolve, 'image/jpeg', 0.9);
+        canvas.toBlob(resolve, 'image/jpeg', 0.95);
       };
       img.src = url;
     });
   };
 
   return (
-    <div style={containerStyle} onMouseMove={onMouseMove} onMouseUp={() => setIsDragging(false)}>
+    <div style={containerStyle} onMouseMove={onMouseMove} onMouseUp={() => {setIsDragging(false); setSnapGuide({x:null, y:null});}}>
       <div style={headerSection}>
         <h2 style={{color: '#3b82f6', margin:0}}>성적표 에디터 SVG Pro 💎</h2>
         <div style={{display:'flex', gap:'10px'}}>
            <input type="file" onChange={handleImageUpload} accept="image/*" id="bg-upload" style={{display:'none'}} />
            <label htmlFor="bg-upload" style={topBtn}>📸 배경 설정</label>
            <button onClick={saveConfig} style={{...topBtn, backgroundColor: '#10b981'}}>💾 세팅 저장</button>
-           <button onClick={handleZipDownload} disabled={progress.status !== 'idle'} style={{...topBtn, backgroundColor: '#f59e0b'}}>
-             📦 전체 압축다운
-           </button>
+           <button onClick={handleZipDownload} disabled={progress.status !== 'idle'} style={{...topBtn, backgroundColor: '#f59e0b'}}>📦 전체 다운로드</button>
         </div>
       </div>
 
@@ -150,65 +178,95 @@ function Report({ headers }) {
           <h4 style={panelTitle}>항목 추가</h4>
           <div style={tagBox}>
             {headers.map(h => (
-              <button key={h} onClick={() => setElements([...elements, {id: Date.now(), text: h, x: 50, y: 50, fontSize: 40, color: '#000'}])} style={tagBtn}>{h} +</button>
+              <button key={h} onClick={() => setElements([...elements, {id: Date.now(), text: h, x: 100, y: 100, fontSize: 40, color: '#000000'}])} style={tagBtn}>{h} +</button>
             ))}
           </div>
-          {selectedId && (
-            <div style={{marginTop:'20px'}}>
-              <h4 style={panelTitle}>선택 항목 설정</h4>
-              <input type="color" value={elements.find(e=>e.id===selectedId)?.color} onChange={(e)=>setElements(prev=>prev.map(el=>el.id===selectedId?{...el, color:e.target.value}:el))} />
-              <input type="number" value={elements.find(e=>e.id===selectedId)?.fontSize} onChange={(e)=>setElements(prev=>prev.map(el=>el.id===selectedId?{...el, fontSize:parseInt(e.target.value)}:el))} style={{width:'60px', marginLeft:'10px'}} />
-              <button onClick={() => setElements(prev=>prev.filter(el=>el.id!==selectedId))} style={deleteBtn}>삭제</button>
-            </div>
-          )}
+
+          <h4 style={{...panelTitle, marginTop: '30px'}}>2. 요소 관리 리스트</h4>
+          <div style={elementContainer}>
+            {elements.length === 0 && <p style={{color:'#666', fontSize:'12px'}}>추가된 항목이 없습니다.</p>}
+            {elements.map(el => (
+              <div key={el.id} 
+                onClick={() => setSelectedId(el.id)}
+                style={{...elementCard, border: selectedId === el.id ? '1px solid #3b82f6' : '1px solid #333'}}
+              >
+                <div style={{display:'flex', justifyContent:'space-between', marginBottom:'8px'}}>
+                  <span style={{fontWeight:'bold', fontSize:'13px'}}>{el.text}</span>
+                  <button onClick={(e) => { e.stopPropagation(); setElements(elements.filter(x=>x.id!==el.id)); }} style={miniDelBtn}>✕</button>
+                </div>
+                <div style={{display:'flex', flexWrap:'wrap', gap:'5px'}}>
+                  <input type="color" value={el.color} onChange={(e) => updateElement(el.id, 'color', e.target.value)} style={colorInp} />
+                  <input type="number" value={el.fontSize} onChange={(e) => updateElement(el.id, 'fontSize', parseInt(e.target.value))} style={numInp} title="폰트크기" />
+                  <select style={numInp} onChange={(e) => updateElement(el.id, 'fontWeight', e.target.value)}>
+                    <option value="bold">굵게</option>
+                    <option value="normal">보통</option>
+                  </select>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div style={previewArea}>
-          <svg
-            ref={svgRef}
-            viewBox={`0 0 ${imgSize.w} ${imgSize.h}`}
-            style={{ width: '100%', height: 'auto', maxHeight: '100%', backgroundColor: '#fff', boxShadow: '0 0 20px rgba(0,0,0,0.5)' }}
-          >
-            {bgImage && <image href={bgImage} width={imgSize.w} height={imgSize.h} />}
-            {elements.map(el => (
-              <text
-                key={el.id}
-                x={el.x}
-                y={el.y}
-                onMouseDown={(e) => onMouseDown(e, el)}
-                style={{
-                  fontSize: `${el.fontSize}px`,
-                  fill: el.color,
-                  fontWeight: 'bold',
-                  cursor: 'move',
-                  userSelect: 'none',
-                  paintOrder: 'stroke',
-                  stroke: selectedId === el.id ? '#3b82f6' : 'none',
-                  strokeWidth: 2
-                }}
-                // SVG 특성상 텍스트는 y좌표가 바닥 기준이므로 정렬 보정
-                dominantBaseline="middle"
-              >
-                {el.text}
-              </text>
-            ))}
-          </svg>
+          <div style={{position:'relative', display:'inline-block'}}>
+            <svg
+              ref={svgRef}
+              viewBox={`0 0 ${imgSize.w} ${imgSize.h}`}
+              style={{ width: '100%', height: 'auto', maxHeight: '85vh', backgroundColor: '#fff', cursor: isDragging ? 'grabbing' : 'default' }}
+            >
+              {bgImage && <image href={bgImage} width={imgSize.w} height={imgSize.h} />}
+              
+              {/* Snap 가이드선 */}
+              {snapGuide.x && <line x1={snapGuide.x} y1="0" x2={snapGuide.x} y2={imgSize.h} stroke="#00ff00" strokeWidth="2" strokeDasharray="5,5" />}
+              {snapGuide.y && <line x1="0" y1={snapGuide.y} x2={imgSize.w} y2={snapGuide.y} stroke="#00ff00" strokeWidth="2" strokeDasharray="5,5" />}
+
+              {elements.map(el => (
+                <text
+                  key={el.id}
+                  x={el.x}
+                  y={el.y}
+                  onMouseDown={(e) => onMouseDown(e, el)}
+                  onWheel={(e) => onWheel(e, el.id)}
+                  style={{
+                    fontSize: `${el.fontSize}px`,
+                    fill: el.color,
+                    fontWeight: el.fontWeight || 'bold',
+                    cursor: 'grab',
+                    userSelect: 'none',
+                    paintOrder: 'stroke',
+                    stroke: selectedId === el.id ? '#3b82f6' : 'none',
+                    strokeWidth: selectedId === el.id ? 3 : 0
+                  }}
+                  dominantBaseline="middle"
+                  textAnchor="start"
+                >
+                  {el.text}
+                </text>
+              ))}
+            </svg>
+            <div style={tipBox}>💡 텍스트 위에서 마우스 휠을 돌려 사이즈를 조절하세요!</div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-// 스타일 정의 (이전과 유사)
+// 스타일 정의
 const containerStyle = { padding: '20px', color: '#fff', height: '100vh', backgroundColor:'#1a1c23', overflow:'hidden' };
-const headerSection = { display: 'flex', justifyContent: 'space-between', marginBottom: '20px' };
+const headerSection = { display: 'flex', justifyContent: 'space-between', marginBottom: '15px' };
 const topBtn = { padding: '8px 15px', borderRadius: '8px', color: '#fff', border:'none', cursor:'pointer', fontWeight:'bold', fontSize:'12px', backgroundColor:'#3b82f6' };
-const editorLayout = { display: 'flex', gap: '20px', height: 'calc(100% - 80px)' };
-const sidePanel = { width: '250px', backgroundColor: '#24262d', padding: '15px', borderRadius: '15px' };
-const panelTitle = { fontSize: '14px', color: '#3b82f6', marginBottom: '15px' };
-const tagBox = { display: 'flex', flexWrap: 'wrap', gap: '8px' };
-const tagBtn = { padding: '6px 10px', fontSize: '12px', borderRadius: '6px', border: '1px solid #3b82f6', color: '#3b82f6', backgroundColor: 'transparent', cursor: 'pointer' };
+const editorLayout = { display: 'flex', gap: '20px', height: 'calc(100% - 70px)' };
+const sidePanel = { width: '300px', backgroundColor: '#24262d', padding: '15px', borderRadius: '15px', display:'flex', flexDirection:'column' };
+const panelTitle = { fontSize: '14px', color: '#3b82f6', marginBottom: '10px', borderBottom:'1px solid #333', paddingBottom:'5px' };
+const tagBox = { display: 'flex', flexWrap: 'wrap', gap: '5px' };
+const tagBtn = { padding: '5px 8px', fontSize: '11px', borderRadius: '4px', border: '1px solid #444', color: '#ccc', backgroundColor: '#333', cursor: 'pointer' };
+const elementContainer = { flex:1, overflowY:'auto', marginTop:'10px', paddingRight:'5px' };
+const elementCard = { backgroundColor:'#1e2028', padding:'10px', borderRadius:'8px', marginBottom:'10px', cursor:'pointer' };
+const miniDelBtn = { background:'none', border:'none', color:'#ef4444', cursor:'pointer', fontSize:'14px' };
+const colorInp = { width:'30px', height:'25px', border:'none', padding:0, cursor:'pointer', backgroundColor:'transparent' };
+const numInp = { width:'60px', height:'25px', backgroundColor:'#2d303a', color:'#fff', border:'1px solid #444', borderRadius:'4px', fontSize:'11px' };
 const previewArea = { flex: 1, backgroundColor: '#111', borderRadius: '15px', display: 'flex', justifyContent: 'center', alignItems: 'center', overflow:'hidden' };
-const deleteBtn = { display:'block', marginTop:'10px', width:'100%', padding:'5px', backgroundColor:'#ef4444', color:'#fff', border:'none', borderRadius:'4px' };
+const tipBox = { position:'absolute', bottom:'-25px', left:0, color:'#888', fontSize:'11px' };
 
 export default Report;
