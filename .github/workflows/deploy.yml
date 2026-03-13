@@ -10,19 +10,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # v3 -> v4 업데이트
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4 # v3 -> v4 업데이트
         with:
-          node-version: 18
+          node-version: 22 # 18 -> 22 (최신 안정 버전)
+          cache: 'npm' # 빌드 속도 향상을 위한 캐시 추가
 
       - name: Install and Build
         run: |
           npm install
-          CI=false npm run build
+          CI=false npm run build # CI=false는 경고를 에러로 처리하지 않게 해줍니다.
 
-      - name: Deploy`
+      - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: build
