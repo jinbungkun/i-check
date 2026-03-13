@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import * as fabric from 'fabric'; // 빌드 에러 해결을 위한 import 방식
+// ✅ 수정: fabric 임포트 방식을 가장 안전한 방식으로 변경
+import * as fabric from 'fabric'; 
 import { requestGAS } from '../utils/GoogleAppScript';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
@@ -10,15 +11,27 @@ function Report({ headers }) {
   const canvasRef = useRef(null);
   const fabricCanvas = useRef(null);
 
+  // ✅ 버전 호환성을 위해 fabric 객체 추출
+  // fabric.fabric으로 되어있거나 fabric 자체이거나를 대응합니다.
+  const f = fabric.fabric || fabric;
+
   useEffect(() => {
     // 캔버스 초기화
-    fabricCanvas.current = new fabric.fabric.Canvas(canvasRef.current, {
+    fabricCanvas.current = new f.Canvas(canvasRef.current, {
       width: 800,
       height: 600,
       backgroundColor: '#333'
     });
 
-    // 삭제 기능: Delete 키를 누르면 선택된 객체 삭제
+    // 세팅값 불러오기
+    const savedConfig = localStorage.getItem('fabric_report_config');
+    if (savedConfig) {
+      fabricCanvas.current.loadFromJSON(savedConfig, () => {
+        fabricCanvas.current.renderAll();
+      });
+    }
+
+    // 삭제 단축키
     const handleKeyDown = (e) => {
       if (e.key === 'Delete' || e.key === 'Backspace') {
         const activeObjects = fabricCanvas.current.getActiveObjects();
@@ -30,39 +43,23 @@ function Report({ headers }) {
     };
     window.addEventListener('keydown', handleKeyDown);
 
-    // 1-2. 기존 세팅값 불러오기 (배경 포함)
-    const savedConfig = localStorage.getItem('fabric_report_config');
-    if (savedConfig) {
-      fabricCanvas.current.loadFromJSON(savedConfig, () => {
-        fabricCanvas.current.renderAll();
-      });
-    }
-
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       fabricCanvas.current.dispose();
     };
-  }, []);
+  }, [f]); // f가 변경될 때 대응 (보통 초기 1회)
 
-  // 1-1. 배경넣고 세팅값 저장하기
-  const saveLayout = () => {
-    // 캔버스의 모든 상태(객체, 배경이미지 위치 등)를 JSON으로 저장
-    const config = fabricCanvas.current.toJSON();
-    localStorage.setItem('fabric_report_config', JSON.stringify(config));
-    alert("💾 배경과 레이아웃이 안전하게 저장되었습니다.");
-  };
-
+  // 배경 설정 및 저장
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (f) => {
-      fabric.fabric.Image.fromURL(f.target.result, (img) => {
+    reader.onload = (event) => {
+      f.Image.fromURL(event.target.result, (img) => {
         const canvas = fabricCanvas.current;
         const scale = 800 / img.width;
         canvas.setDimensions({ width: 800, height: img.height * scale });
-        
         canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
           scaleX: scale,
           scaleY: scale
@@ -72,32 +69,34 @@ function Report({ headers }) {
     reader.readAsDataURL(file);
   };
 
-  // 2. 카테고리 추가
+  const saveLayout = () => {
+    const config = fabricCanvas.current.toJSON();
+    localStorage.setItem('fabric_report_config', JSON.stringify(config));
+    alert("💾 레이아웃과 배경이 저장되었습니다.");
+  };
+
+  // 요소 추가
   const addTextElement = (header) => {
-    const text = new fabric.fabric.IText(header, {
+    const text = new f.IText(header, {
       left: 100,
       top: 100,
       fontSize: 25,
       fontFamily: 'Nanum Gothic',
       fontWeight: 'bold',
-      fill: '#000000',
-      dataKey: header // 데이터 매칭용 키
+      fill: '#000000'
     });
+    text.set('dataKey', header); // 학생 데이터 매칭용
     fabricCanvas.current.add(text);
-    fabricCanvas.current.setActiveObject(text); // 추가하자마자 선택 상태로 (삭제 쉽게)
+    fabricCanvas.current.setActiveObject(text);
   };
 
-  // 선택된 요소 삭제 버튼용 함수
   const deleteSelected = () => {
     const activeObjects = fabricCanvas.current.getActiveObjects();
-    if (activeObjects.length > 0) {
-      activeObjects.forEach(obj => fabricCanvas.current.remove(obj));
-      fabricCanvas.current.discardActiveObject().renderAll();
-    } else {
-      alert("삭제할 항목을 먼저 선택해주세요.");
-    }
+    activeObjects.forEach(obj => fabricCanvas.current.remove(obj));
+    fabricCanvas.current.discardActiveObject().renderAll();
   };
 
+  // 출력물 생성
   const handleZipDownload = async () => {
     const canvas = fabricCanvas.current;
     if (!canvas.backgroundImage) return alert("배경 이미지를 먼저 설정해주세요.");
@@ -112,15 +111,14 @@ function Report({ headers }) {
     for (let i = 0; i < students.length; i++) {
       const student = students[i];
       canvas.getObjects('i-text').forEach(obj => {
-        if (obj.dataKey) {
-          obj.set('text', String(student[obj.dataKey] || obj.dataKey));
+        if (obj.get('dataKey')) {
+          obj.set('text', String(student[obj.get('dataKey')] || obj.get('dataKey')));
         }
       });
       canvas.renderAll();
 
       const dataURL = canvas.toDataURL({ format: 'jpeg', quality: 0.9, multiplier });
-      const base64Data = dataURL.replace(/^data:image\/jpeg;base64,/, "");
-      zip.file(`${student.이름}_성적표.jpg`, base64Data, { base64: true });
+      zip.file(`${student.이름}_성적표.jpg`, dataURL.split(',')[1], { base64: true });
       setProgress(prev => ({ ...prev, current: i + 1 }));
     }
 
@@ -151,30 +149,21 @@ function Report({ headers }) {
               <button key={h} onClick={() => addTextElement(h)} style={tagBtn}>{h} +</button>
             ))}
           </div>
-          
-          <h4 style={{...panelTitle, marginTop: '30px'}}>편집 도구</h4>
-          <button onClick={deleteSelected} style={deleteBtn}>🗑️ 선택 항목 삭제</button>
-          
-          <div style={infoBox}>
-            <p>• 항목 클릭 후 <b>Delete</b>키로 삭제 가능</p>
-            <p>• 배경이미지도 저장 버튼을 눌러야 유지됩니다.</p>
-          </div>
+          <h4 style={{...panelTitle, marginTop: '30px'}}>편집</h4>
+          <button onClick={deleteSelected} style={deleteBtn}>🗑️ 선택 삭제</button>
         </div>
-
         <div style={previewArea}>
           <div style={canvasShadow}>
             <canvas ref={canvasRef} />
           </div>
         </div>
       </div>
-      {/* progress overlay 생략 (기존과 동일) */}
     </div>
   );
 }
 
-// 추가된 스타일
+// 스타일 (생략 - 이전과 동일)
 const deleteBtn = { width: '100%', padding: '10px', backgroundColor: '#ef4444', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' };
-const infoBox = { marginTop:'20px', color:'#888', fontSize:'11px', lineHeight:'1.6' };
 const containerStyle = { padding: '20px', color: '#fff', height: '100vh', backgroundColor:'#1a1c23', overflow:'hidden' };
 const headerSection = { display: 'flex', justifyContent: 'space-between', marginBottom: '20px' };
 const topBtn = { padding: '8px 15px', borderRadius: '8px', color: '#fff', border:'none', cursor:'pointer', fontWeight:'bold', fontSize:'12px', backgroundColor:'#3b82f6' };
