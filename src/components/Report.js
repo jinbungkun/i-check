@@ -111,7 +111,7 @@ function Report({ headers = [] }) {
       id: `id_${Date.now()}`,
       text: header,
       x: 100, y: 100,
-      fontSize: 40, color: '#000000', fontWeight: 'bold'
+      fontSize: 100, color: '#000000', fontWeight: 'bold'
     };
     setElements(prev => [...prev, newEl]);
     setSelectedId(newEl.id);
