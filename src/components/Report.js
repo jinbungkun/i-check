@@ -16,7 +16,6 @@ function Report({ headers = [] }) {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [snapGuide, setSnapGuide] = useState({ x: null, y: null });
 
-  // 1. 초기 데이터 로드 (Local Storage)
   useEffect(() => {
     const saved = localStorage.getItem('svg_report_config');
     if (saved) {
@@ -29,7 +28,6 @@ function Report({ headers = [] }) {
     }
   }, []);
 
-  // 2. 단축키 삭제 로직
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
@@ -43,7 +41,6 @@ function Report({ headers = [] }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedId]);
 
-  // 3. 항목 추가 (기본 폰트 크기 100)
   const addElement = (e, header) => {
     e.stopPropagation();
     if (elements.some(el => el.text === header)) {
@@ -73,7 +70,6 @@ function Report({ headers = [] }) {
     if (selectedId === id) setSelectedId(null);
   };
 
-  // 4. 좌표 및 드래그 로직
   const getSVGPoint = (e) => {
     if (!svgRef.current) return { x: 0, y: 0 };
     const rect = svgRef.current.getBoundingClientRect();
@@ -85,7 +81,7 @@ function Report({ headers = [] }) {
   };
 
   const onMouseDown = (e, el, mode) => {
-    e.stopPropagation();
+    e.stopPropagation(); // 부모로 클릭 이벤트 전파 차단
     setSelectedId(el.id);
     setDragMode(mode);
     setIsDragging(true);
@@ -103,7 +99,6 @@ function Report({ headers = [] }) {
       let newX = pt.x - dragOffset.x;
       let newY = pt.y - dragOffset.y;
       
-      // 자석(Snap) 효과
       let snappedX = null, snappedY = null;
       elements.forEach(other => {
         if (other.id === selectedId) return;
@@ -121,7 +116,6 @@ function Report({ headers = [] }) {
     }
   };
 
-  // 5. 이미지 및 다운로드 로직
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -140,7 +134,7 @@ function Report({ headers = [] }) {
   const handleZipDownload = async () => {
     if (!bgImage) return alert("배경 이미지를 먼저 업로드해주세요.");
     const backupId = selectedId;
-    setSelectedId(null); // 출력물에서 가이드라인 제거
+    setSelectedId(null);
     await new Promise(r => setTimeout(r, 100));
 
     try {
@@ -208,7 +202,6 @@ function Report({ headers = [] }) {
       </div>
 
       <div style={editorLayout}>
-        {/* 사이드바 */}
         <div style={sidePanel}>
           <h4 style={panelTitle}>항목 추가</h4>
           <div style={tagBox}>
@@ -227,10 +220,10 @@ function Report({ headers = [] }) {
                   <button onClick={(e) => removeElement(e, el.id)} style={delBtn}>✕</button>
                 </div>
                 <div style={{display:'flex', gap:'8px', alignItems:'center'}}>
-                  <input type="color" value={el.color} onChange={(e) => updateElement(el.id, 'color', e.target.value)} style={colorPickerStyle} />
+                  <input type="color" value={el.color} onClick={(e) => e.stopPropagation()} onChange={(e) => updateElement(el.id, 'color', e.target.value)} style={colorPickerStyle} />
                   <div style={numInputWrapper}>
                     <span style={{fontSize:'10px', color:'#888'}}>Size</span>
-                    <input type="number" value={el.fontSize} onChange={(e) => updateElement(el.id, 'fontSize', parseInt(e.target.value) || 0)} style={numInp} />
+                    <input type="number" value={el.fontSize} onClick={(e) => e.stopPropagation()} onChange={(e) => updateElement(el.id, 'fontSize', parseInt(e.target.value) || 0)} style={numInp} />
                   </div>
                 </div>
               </div>
@@ -238,26 +231,33 @@ function Report({ headers = [] }) {
           </div>
         </div>
 
-        {/* 프리뷰 영역 */}
         <div style={previewArea} onClick={() => setSelectedId(null)}>
           <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems:'center', overflow: 'auto' }}>
             <svg ref={svgRef} viewBox={`0 0 ${imgSize.w} ${imgSize.h}`} style={{ width: 'auto', height: 'auto', maxHeight: '90%', backgroundColor: '#fff', boxShadow: '0 0 50px rgba(0,0,0,0.5)' }}>
               {bgImage && <image href={bgImage} width={imgSize.w} height={imgSize.h} />}
               
-              {/* 스냅 가이드 라인 */}
               {snapGuide.x && <line x1={snapGuide.x} y1="0" x2={snapGuide.x} y2={imgSize.h} stroke="#00ff00" strokeWidth="2" strokeDasharray="10,10" />}
               {snapGuide.y && <line x1="0" y1={snapGuide.y} x2={imgSize.w} y2={snapGuide.y} stroke="#00ff00" strokeWidth="2" strokeDasharray="10,10" />}
 
               {elements.map(el => {
                 const isSelected = selectedId === el.id;
-                const textW = el.text.length * el.fontSize * 0.6; // 대략적인 너비
+                const textW = el.text.length * el.fontSize * 0.6; 
                 const textH = el.fontSize;
 
                 return (
-                  <g key={el.id}>
-                    {/* 개선된 가이드 박스 */}
+                  <g key={el.id} onClick={(e) => e.stopPropagation()}>
                     {isSelected && (
-                      <rect x={el.x - textW/2 - 5} y={el.y - textH/2 - 5} width={textW + 10} height={textH + 10} fill="none" stroke="#3b82f6" strokeWidth="2" strokeDasharray="5,5" />
+                      <rect 
+                        x={el.x - textW/2 - 10} 
+                        y={el.y - textH/2 - 10} 
+                        width={textW + 20} 
+                        height={textH + 20} 
+                        fill="rgba(59, 130, 246, 0.05)" 
+                        stroke="#3b82f6" 
+                        strokeWidth="2" 
+                        strokeDasharray="5,5" 
+                        pointerEvents="none" 
+                      />
                     )}
                     <text
                       x={el.x} y={el.y}
@@ -268,9 +268,15 @@ function Report({ headers = [] }) {
                         dominantBaseline: "middle", textAnchor: "middle"
                       }}
                     >{el.text}</text>
-                    {/* 리사이즈 핸들 */}
                     {isSelected && (
-                      <circle cx={el.x + textW/2} cy={el.y + textH/2} r="10" fill="#3b82f6" style={{ cursor: 'nwse-resize' }} onMouseDown={(e) => onMouseDown(e, el, 'resize')} />
+                      <circle 
+                        cx={el.x + textW/2 + 5} 
+                        cy={el.y + textH/2 + 5} 
+                        r="12" 
+                        fill="#3b82f6" 
+                        style={{ cursor: 'nwse-resize' }} 
+                        onMouseDown={(e) => onMouseDown(e, el, 'resize')} 
+                      />
                     )}
                   </g>
                 );
@@ -284,7 +290,7 @@ function Report({ headers = [] }) {
   );
 }
 
-// 스타일 정의 (빠진 부분 복구)
+// 스타일 생략 (기존과 동일하되 가시성 보정)
 const containerStyle = { padding: '20px', color: '#fff', height: '100vh', backgroundColor:'#1a1c23', overflow:'hidden', fontFamily:'sans-serif' };
 const headerSection = { display: 'flex', justifyContent: 'space-between', marginBottom: '15px', alignItems:'center' };
 const topBtn = { padding: '10px 18px', borderRadius: '8px', color: '#fff', border:'none', cursor:'pointer', fontWeight:'bold', fontSize:'13px', backgroundColor:'#3b82f6' };
