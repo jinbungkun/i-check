@@ -5,7 +5,7 @@ import { saveAs } from 'file-saver';
 
 function Report({ headers = [] }) {
   // --- 템플릿 관리 상태 ---
-  const [templates, setTemplates] = useState([]); // [{id, title, bgImage, imgSize, elements}]
+  const [templates, setTemplates] = useState([]); 
   const [currentTplId, setCurrentTplId] = useState(null);
 
   // --- 현재 편집 중인 데이터 ---
@@ -22,7 +22,7 @@ function Report({ headers = [] }) {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [snapGuide, setSnapGuide] = useState({ x: null, y: null });
 
-  // 1. 초기 로드: LocalStorage에서 템플릿 목록 불러오기
+  // 1. 초기 로드
   useEffect(() => {
     const saved = localStorage.getItem('report_templates_v2');
     if (saved) {
@@ -34,7 +34,7 @@ function Report({ headers = [] }) {
     }
   }, []);
 
-  // 2. 템플릿 전환 함수
+  // 2. 템플릿 전환
   const loadTemplate = (tpl) => {
     if (!tpl) return;
     setCurrentTplId(tpl.id);
@@ -44,9 +44,9 @@ function Report({ headers = [] }) {
     setSelectedId(null);
   };
 
-  // 3. 템플릿 생성/저장/삭제 로직
+  // 3. 템플릿 제어 로직
   const createNewTemplate = () => {
-    const name = prompt("새 성적표 종류의 이름을 입력하세요 (예: 3월 월말평가)");
+    const name = prompt("새 성적표 종류의 이름을 입력하세요:");
     if (!name) return;
     const newTpl = {
       id: `tpl_${Date.now()}`,
@@ -77,23 +77,18 @@ function Report({ headers = [] }) {
     e.stopPropagation();
     if (!currentTplId) return;
     if (!window.confirm("현재 템플릿을 삭제하시겠습니까?")) return;
-    
     const updated = templates.filter(t => t.id !== currentTplId);
     setTemplates(updated);
     saveToLocal(updated);
     if (updated.length > 0) loadTemplate(updated[0]);
-    else {
-        setCurrentTplId(null);
-        setBgImage(null);
-        setElements([]);
-    }
+    else { setCurrentTplId(null); setBgImage(null); setElements([]); }
   };
 
   const saveToLocal = (data) => {
     localStorage.setItem('report_templates_v2', JSON.stringify(data));
   };
 
-  // --- 기존 드래그 및 항목 편집 로직 ---
+  // --- 편집 및 드래그 로직 ---
   useEffect(() => {
     const handleKeyDown = (e) => {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
@@ -113,8 +108,8 @@ function Report({ headers = [] }) {
     const newEl = {
       id: `id_${Date.now()}`,
       text: header,
-      x: imgSize.w / 2, y: imgSize.h / 2,
-      fontSize: 100, color: '#000000', fontWeight: 'bold'
+      x: 100, y: 100, // 왼쪽 정렬이므로 시작점을 여유있게 배치
+      fontSize: 40, color: '#000000', fontWeight: 'bold'
     };
     setElements(prev => [...prev, newEl]);
     setSelectedId(newEl.id);
@@ -173,7 +168,7 @@ function Report({ headers = [] }) {
     reader.readAsDataURL(file);
   };
 
-  // --- ZIP 다운로드 로직 ---
+  // --- 출력 로직 ---
   const handleZipDownload = async () => {
     if (!bgImage) return alert("배경 이미지를 먼저 업로드해주세요.");
     const backupId = selectedId;
@@ -228,18 +223,18 @@ function Report({ headers = [] }) {
 
   return (
     <div style={containerStyle} onMouseMove={onMouseMove} onMouseUp={() => {setIsDragging(false); setSnapGuide({x:null, y:null});}}>
-      {/* 1. 상단 템플릿 관리 바 */}
+      {/* 상단 바 */}
       <div style={templateBar}>
         <div style={{display:'flex', gap:'12px', alignItems:'center'}}>
           <h3 style={{margin:0, color:'#3b82f6', fontSize:'18px'}}>성적표 에디터 Pro</h3>
           <div style={divider} />
-          <span style={{fontSize:'13px', color:'#888'}}>종류 선택:</span>
+          <span style={{fontSize:'13px', color:'#888'}}>종류:</span>
           <select 
             value={currentTplId || ''} 
             onChange={(e) => loadTemplate(templates.find(t => t.id === e.target.value))}
             style={selectStyle}
           >
-            {templates.length === 0 && <option value="">템플릿을 추가해주세요</option>}
+            {templates.length === 0 && <option value="">추가 필요</option>}
             {templates.map(tpl => (
               <option key={tpl.id} value={tpl.id}>{tpl.title}</option>
             ))}
@@ -258,7 +253,7 @@ function Report({ headers = [] }) {
       </div>
 
       <div style={editorLayout}>
-        {/* 2. 사이드바 */}
+        {/* 왼쪽 패널 */}
         <div style={sidePanel}>
           <h4 style={panelTitle}>항목 추가</h4>
           <div style={tagBox}>
@@ -286,28 +281,65 @@ function Report({ headers = [] }) {
           </div>
         </div>
 
-        {/* 3. 메인 프리뷰 영역 */}
+        {/* 프리뷰 영역 */}
         <div style={previewArea} onClick={() => setSelectedId(null)}>
           {!currentTplId ? (
-            <div style={emptyState}>좌측 상단의 [+ 새 종류] 버튼을 눌러 시작하세요!</div>
+            <div style={emptyState}>좌측 상단의 [+ 새 종류]를 눌러주세요.</div>
           ) : (
             <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems:'center', overflow: 'auto' }}>
               <svg ref={svgRef} viewBox={`0 0 ${imgSize.w} ${imgSize.h}`} style={{ width: 'auto', height: 'auto', maxHeight: '95%', backgroundColor: '#fff', boxShadow: '0 0 50px rgba(0,0,0,0.5)' }}>
                 {bgImage && <image href={bgImage} width={imgSize.w} height={imgSize.h} />}
                 {snapGuide.x && <line x1={snapGuide.x} y1="0" x2={snapGuide.x} y2={imgSize.h} stroke="#00ff00" strokeWidth="2" strokeDasharray="10,10" />}
                 {snapGuide.y && <line x1="0" y1={snapGuide.y} x2={imgSize.w} y2={snapGuide.y} stroke="#00ff00" strokeWidth="2" strokeDasharray="10,10" />}
+                
                 {elements.map(el => {
                   const isSelected = selectedId === el.id;
-                  const textW = el.text.length * el.fontSize * 0.6; 
+                  // 왼쪽 정렬 기준 너비/높이 계산
+                  const textW = el.text.length * el.fontSize * 0.7; 
                   const textH = el.fontSize;
                   return (
                     <g key={el.id} onClick={(e) => e.stopPropagation()}>
+                      {/* 선택 박스: x지점부터 오른쪽으로 그려짐 */}
                       {isSelected && (
-                        <rect x={el.x - textW/2 - 10} y={el.y - textH/2 - 10} width={textW + 20} height={textH + 20} fill="rgba(59, 130, 246, 0.05)" stroke="#3b82f6" strokeWidth="2" strokeDasharray="5,5" pointerEvents="none" />
+                        <rect 
+                          x={el.x - 10} 
+                          y={el.y - textH/2 - 10} 
+                          width={textW + 20} 
+                          height={textH + 20} 
+                          fill="rgba(59, 130, 246, 0.05)" 
+                          stroke="#3b82f6" 
+                          strokeWidth="2" 
+                          strokeDasharray="5,5" 
+                          pointerEvents="none" 
+                        />
                       )}
-                      <text x={el.x} y={el.y} onMouseDown={(e) => onMouseDown(e, el, 'move')} style={{ fontSize: `${el.fontSize}px`, fill: el.color, fontWeight: 'bold', cursor: 'move', userSelect: 'none', dominantBaseline: "middle", textAnchor: "start" }}>{el.text}</text>
+                      {/* 텍스트: textAnchor="start"로 왼쪽 정렬 */}
+                      <text 
+                        x={el.x} 
+                        y={el.y} 
+                        onMouseDown={(e) => onMouseDown(e, el, 'move')} 
+                        style={{ 
+                          fontSize: `${el.fontSize}px`, 
+                          fill: el.color, 
+                          fontWeight: 'bold', 
+                          cursor: 'move', 
+                          userSelect: 'none', 
+                          dominantBaseline: "middle", 
+                          textAnchor: "start" 
+                        }}
+                      >
+                        {el.text}
+                      </text>
+                      {/* 리사이즈 핸들: 텍스트 오른쪽 끝에 배치 */}
                       {isSelected && (
-                        <circle cx={el.x + textW/2 + 5} cy={el.y + textH/2 + 5} r="12" fill="#3b82f6" style={{ cursor: 'nwse-resize' }} onMouseDown={(e) => onMouseDown(e, el, 'resize')} />
+                        <circle 
+                          cx={el.x + textW} 
+                          cy={el.y + textH/2 + 5} 
+                          r="12" 
+                          fill="#3b82f6" 
+                          style={{ cursor: 'nwse-resize' }} 
+                          onMouseDown={(e) => onMouseDown(e, el, 'resize')} 
+                        />
                       )}
                     </g>
                   );
@@ -321,7 +353,7 @@ function Report({ headers = [] }) {
   );
 }
 
-// --- 스타일 정의 ---
+// --- CSS 스타일 ---
 const containerStyle = { padding: '20px', color: '#fff', height: '100vh', backgroundColor:'#1a1c23', overflow:'hidden', fontFamily:'sans-serif' };
 const templateBar = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 20px', backgroundColor: '#24262d', borderRadius: '15px', marginBottom: '15px', border: '1px solid #333' };
 const divider = { width: '1px', height: '20px', backgroundColor: '#444' };
