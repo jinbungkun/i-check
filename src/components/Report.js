@@ -305,7 +305,7 @@ function Report({ headers = [] }) {
                       {isSelected && (
                         <rect x={el.x - textW/2 - 10} y={el.y - textH/2 - 10} width={textW + 20} height={textH + 20} fill="rgba(59, 130, 246, 0.05)" stroke="#3b82f6" strokeWidth="2" strokeDasharray="5,5" pointerEvents="none" />
                       )}
-                      <text x={el.x} y={el.y} onMouseDown={(e) => onMouseDown(e, el, 'move')} style={{ fontSize: `${el.fontSize}px`, fill: el.color, fontWeight: 'bold', cursor: 'move', userSelect: 'none', dominantBaseline: "middle", textAnchor: "middle" }}>{el.text}</text>
+                      <text x={el.x} y={el.y} onMouseDown={(e) => onMouseDown(e, el, 'move')} style={{ fontSize: `${el.fontSize}px`, fill: el.color, fontWeight: 'bold', cursor: 'move', userSelect: 'none', dominantBaseline: "middle", textAnchor: "start" }}>{el.text}</text>
                       {isSelected && (
                         <circle cx={el.x + textW/2 + 5} cy={el.y + textH/2 + 5} r="12" fill="#3b82f6" style={{ cursor: 'nwse-resize' }} onMouseDown={(e) => onMouseDown(e, el, 'resize')} />
                       )}
