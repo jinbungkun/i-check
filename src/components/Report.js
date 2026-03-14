@@ -17,6 +17,8 @@ function Report({ headers = [] }) {
   const [selectedId, setSelectedId] = useState(null);
   const [progress, setProgress] = useState({ current: 0, total: 0, status: 'idle' });
   const svgRef = useRef(null);
+  const textRefs = useRef({}); // 실제 텍스트 요소의 크기를 측정하기 위한 객체형 ref
+  
   const [dragMode, setDragMode] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -108,7 +110,7 @@ function Report({ headers = [] }) {
     const newEl = {
       id: `id_${Date.now()}`,
       text: header,
-      x: 100, y: 100, // 왼쪽 정렬이므로 시작점을 여유있게 배치
+      x: 100, y: 100,
       fontSize: 40, color: '#000000', fontWeight: 'bold'
     };
     setElements(prev => [...prev, newEl]);
@@ -294,18 +296,21 @@ function Report({ headers = [] }) {
                 
                 {elements.map(el => {
                   const isSelected = selectedId === el.id;
-                  // 왼쪽 정렬 기준 너비/높이 계산
-                  const textW = el.text.length * el.fontSize * 0.7; 
-                  const textH = el.fontSize;
+                  
+                  // --- 핵심: 실제 텍스트 요소로부터 크기 정보 가져오기 ---
+                  const textNode = textRefs.current[el.id];
+                  // getBBox는 DOM에 마운트된 후 유효합니다.
+                  const bbox = textNode ? textNode.getBBox() : { x: el.x, y: el.y, width: 0, height: 0 };
+
                   return (
                     <g key={el.id} onClick={(e) => e.stopPropagation()}>
-                      {/* 선택 박스: x지점부터 오른쪽으로 그려짐 */}
+                      {/* 선택 박스: 실제 텍스트 크기(bbox)에 맞춤 */}
                       {isSelected && (
                         <rect 
-                          x={el.x - 10} 
-                          y={el.y - textH/2 - 10} 
-                          width={textW + 20} 
-                          height={textH + 20} 
+                          x={bbox.x - 10} 
+                          y={bbox.y - 10} 
+                          width={bbox.width + 20} 
+                          height={bbox.height + 20} 
                           fill="rgba(59, 130, 246, 0.05)" 
                           stroke="#3b82f6" 
                           strokeWidth="2" 
@@ -313,8 +318,9 @@ function Report({ headers = [] }) {
                           pointerEvents="none" 
                         />
                       )}
-                      {/* 텍스트: textAnchor="start"로 왼쪽 정렬 */}
+                      {/* 텍스트 요소 */}
                       <text 
+                        ref={node => textRefs.current[el.id] = node} // Ref 연결
                         x={el.x} 
                         y={el.y} 
                         onMouseDown={(e) => onMouseDown(e, el, 'move')} 
@@ -330,11 +336,11 @@ function Report({ headers = [] }) {
                       >
                         {el.text}
                       </text>
-                      {/* 리사이즈 핸들: 텍스트 오른쪽 끝에 배치 */}
+                      {/* 리사이즈 핸들: 텍스트 실제 너비(bbox.width) 끝에 배치 */}
                       {isSelected && (
                         <circle 
-                          cx={el.x + textW} 
-                          cy={el.y + textH/2 + 5} 
+                          cx={bbox.x + bbox.width + 5} 
+                          cy={bbox.y + bbox.height + 5} 
                           r="12" 
                           fill="#3b82f6" 
                           style={{ cursor: 'nwse-resize' }} 
@@ -353,7 +359,7 @@ function Report({ headers = [] }) {
   );
 }
 
-// --- CSS 스타일 ---
+// --- CSS 스타일 (이전과 동일) ---
 const containerStyle = { padding: '20px', color: '#fff', height: '100vh', backgroundColor:'#1a1c23', overflow:'hidden', fontFamily:'sans-serif' };
 const templateBar = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 20px', backgroundColor: '#24262d', borderRadius: '15px', marginBottom: '15px', border: '1px solid #333' };
 const divider = { width: '1px', height: '20px', backgroundColor: '#444' };
