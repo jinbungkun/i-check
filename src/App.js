@@ -120,7 +120,7 @@ function App() {
       '조회': <Search {...sharedProps} />,
       '스케쥴': <Schedule {...sharedProps} />,
       '포인트': <Points {...sharedProps} />,
-      '랭킹': <Ranking {...sharedProps} />,
+      '랭킹': <Ranking />,
       '등록': <Register {...sharedProps} />,
       '성적표': <Report {...sharedProps} />,  
       '설정': <Setting />
