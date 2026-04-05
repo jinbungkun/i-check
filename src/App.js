@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 // 컴포넌트 임포트
+import Ranking from './components/Ranking';
 import Attendance from './components/Attendance';
 import Search from './components/Search';
 import Schedule from './components/Schedule';
@@ -49,7 +50,7 @@ function App() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const { app: styles } = theme;
-  const menuCategories = ['출석','생일','조회', '스케쥴', '포인트', '등록', '성적표', '설정'];
+  const menuCategories = ['출석','생일','조회', '스케쥴', '포인트', '등록', '랭킹', '성적표', '설정'];
 
   // 화면 크기 실시간 감지
   useEffect(() => {
@@ -119,6 +120,7 @@ function App() {
       '조회': <Search {...sharedProps} />,
       '스케쥴': <Schedule {...sharedProps} />,
       '포인트': <Points {...sharedProps} />,
+      '랭킹': <Ranking {...sharedProps} />,
       '등록': <Register {...sharedProps} />,
       '성적표': <Report {...sharedProps} />,  
       '설정': <Setting />
