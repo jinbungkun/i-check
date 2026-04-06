@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { requestGAS } from '../utils/GoogleAppScript';
 import { subscribeNFC } from '../utils/InputManager';
 
-function Register({ setStudents, headers = [] }) {
+function Register({ students, setStudents, headers = [] }) {
   const [formData, setFormData] = useState({});
   const [selectedDay, setSelectedDay] = useState('');
   const [selectedTime, setSelectedTime] = useState('14:00');
@@ -82,9 +82,10 @@ NFC ID: ${formData.ID}
     }
 
     if (students && students.some(s => s.ID === formData.ID)) {
-  setStatus({ type: 'error', msg: '⚠️ 이미 등록된 ID입니다.' });
-  return;
-}
+      setStatus({ type: 'error', msg: '⚠️ 이미 등록된 ID입니다.' });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const studentDataForGAS = {};
