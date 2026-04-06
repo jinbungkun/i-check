@@ -81,6 +81,10 @@ NFC ID: ${formData.ID}
       return; // '취소'를 누르면 여기서 중단
     }
 
+    if (students && students.some(s => s.ID === formData.ID)) {
+  setStatus({ type: 'error', msg: '⚠️ 이미 등록된 ID입니다.' });
+  return;
+}
     setIsSubmitting(true);
     try {
       const studentDataForGAS = {};
