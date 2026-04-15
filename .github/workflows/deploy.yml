@@ -1,27 +1,26 @@
 name: Auto Deploy
 
+# 기존 push 설정을 삭제하거나 주석 처리하고, workflow_dispatch를 추가합니다.
 on:
-  push:
-    branches:
-      - master
+  workflow_dispatch: # 수동 실행을 가능하게 하는 옵션
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4 # v3 -> v4 업데이트
+        uses: actions/checkout@v4
 
       - name: Setup Node
-        uses: actions/setup-node@v4 # v3 -> v4 업데이트
+        uses: actions/setup-node@v4
         with:
-          node-version: 22 # 18 -> 22 (최신 안정 버전)
-          cache: 'npm' # 빌드 속도 향상을 위한 캐시 추가
+          node-version: 22
+          cache: 'npm'
 
       - name: Install and Build
         run: |
           npm install
-          CI=false npm run build # CI=false는 경고를 에러로 처리하지 않게 해줍니다.
+          CI=false npm run build
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4
