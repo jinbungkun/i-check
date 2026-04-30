@@ -49,6 +49,11 @@ function App() {
   // 📱 반응형 상태: 화면 폭 768px 미만일 때 모바일 모드
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
+  // 출석모드 상태 추가
+  const [isAttendanceMode, setIsAttendanceMode] = useState(() => {
+    return localStorage.getItem('attendance_mode') === 'true';
+  });
+
   const { app: styles } = theme;
   const menuCategories = ['출석','생일','조회', '스케쥴', '포인트', '등록', '랭킹', '성적표', '설정'];
 
@@ -114,6 +119,17 @@ function App() {
       headers: headers 
     };
 
+    // 출석모드일 때는 출석 또는 설정 컴포넌트 표시
+    if (isAttendanceMode) {
+      if (activeMenu === '설정') {
+        return <Setting 
+          isAttendanceMode={isAttendanceMode} 
+          setIsAttendanceMode={setIsAttendanceMode} 
+        />;
+      }
+      return <Attendance {...sharedProps} />;
+    }
+
     const menuMap = {
       '출석': <Attendance {...sharedProps} />,
       '생일': <Birthday {...sharedProps} />,
@@ -123,7 +139,10 @@ function App() {
       '랭킹': <Ranking />,
       '등록': <Register {...sharedProps} />,
       '성적표': <Report {...sharedProps} />,  
-      '설정': <Setting />
+      '설정': <Setting 
+        isAttendanceMode={isAttendanceMode} 
+        setIsAttendanceMode={setIsAttendanceMode} 
+      />
     };
 
     return menuMap[activeMenu] || <div>선택된 메뉴가 없습니다.</div>;
@@ -144,18 +163,33 @@ function App() {
 
         <nav style={navWrapperStyle(isMobile)}>
           <ul style={navStyle(isMobile)}>
-            {menuCategories.map((menu) => (
+            {/* 출석모드일 때는 설정 메뉴만 표시 */}
+            {isAttendanceMode ? (
               <li
-                key={menu}
+                key="설정"
                 style={{
                   ...navItemStyle(isMobile),
-                  ...(activeMenu === menu ? activeNavItemStyle : {})
+                  ...(activeMenu === '설정' ? activeNavItemStyle : {})
                 }}
-                onClick={() => setActiveMenu(menu)}
+                onClick={() => setActiveMenu('설정')}
               >
-                {menu}
+                설정
               </li>
-            ))}
+            ) : (
+              /* 일반모드일 때는 모든 메뉴 표시 */
+              menuCategories.map((menu) => (
+                <li
+                  key={menu}
+                  style={{
+                    ...navItemStyle(isMobile),
+                    ...(activeMenu === menu ? activeNavItemStyle : {})
+                  }}
+                  onClick={() => setActiveMenu(menu)}
+                >
+                  {menu}
+                </li>
+              ))
+            )}
           </ul>
         </nav>
       </header>

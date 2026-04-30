@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { theme } from '../theme';
 
-function Setting() {
+function Setting({ isAttendanceMode, setIsAttendanceMode }) {
   const [gasUrl, setGasUrl] = useState('');
   const [isSaved, setIsSaved] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -27,6 +27,11 @@ function Setting() {
     setTimeout(() => setIsSaved(false), 2000);
   };
 
+  const handleAttendanceModeToggle = (checked) => {
+    setIsAttendanceMode(checked);
+    localStorage.setItem('attendance_mode', checked.toString());
+  };
+
   return (
     <div style={containerStyle}>
       <div style={cardStyle(isMobile)}>
@@ -50,6 +55,22 @@ function Setting() {
         <button style={buttonStyle(isSaved)} onClick={handleSave}>
           {isSaved ? '✅ 설정이 저장되었습니다' : '설정 저장하기'}
         </button>
+
+        {/* 출석모드 토글 */}
+        <div style={toggleGroup}>
+          <label style={toggleLabel}>
+            <input
+              type="checkbox"
+              checked={isAttendanceMode}
+              onChange={(e) => handleAttendanceModeToggle(e.target.checked)}
+              style={checkboxStyle}
+            />
+            <span style={toggleText}>출석모드 활성화</span>
+          </label>
+          <p style={toggleDesc}>
+            출석모드를 켜면 메뉴가 숨겨지고 출석 화면으로 바로 진입합니다.
+          </p>
+        </div>
 
         <div style={infoBox}>
           <p style={infoText}>• 브라우저 쿠키를 삭제하면 설정이 초기화될 수 있습니다.</p>
@@ -137,6 +158,42 @@ const infoText = {
   margin: '5px 0',
   fontSize: '12px',
   color: '#555',
+  lineHeight: '1.4'
+};
+
+const toggleGroup = {
+  marginTop: '30px',
+  padding: '20px',
+  backgroundColor: '#1a1c23',
+  borderRadius: '12px',
+  textAlign: 'left'
+};
+
+const toggleLabel = {
+  display: 'flex',
+  alignItems: 'center',
+  cursor: 'pointer',
+  fontSize: '16px',
+  fontWeight: '600',
+  color: '#fff'
+};
+
+const checkboxStyle = {
+  width: '18px',
+  height: '18px',
+  marginRight: '12px',
+  accentColor: '#3b82f6',
+  cursor: 'pointer'
+};
+
+const toggleText = {
+  flex: 1
+};
+
+const toggleDesc = {
+  margin: '8px 0 0 0',
+  fontSize: '12px',
+  color: '#888',
   lineHeight: '1.4'
 };
 
