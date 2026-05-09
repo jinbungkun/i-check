@@ -163,18 +163,20 @@ function App() {
 
         <nav style={navWrapperStyle(isMobile)}>
           <ul style={navStyle(isMobile)}>
-            {/* 출석모드일 때는 설정 메뉴만 표시 */}
+            {/* 출석모드일 때는 출석과 설정 메뉴 표시 */}
             {isAttendanceMode ? (
-              <li
-                key="설정"
-                style={{
-                  ...navItemStyle(isMobile),
-                  ...(activeMenu === '설정' ? activeNavItemStyle : {})
-                }}
-                onClick={() => setActiveMenu('설정')}
-              >
-                설정
-              </li>
+              ['출석', '설정'].map((menu) => (
+                <li
+                  key={menu}
+                  style={{
+                    ...navItemStyle(isMobile),
+                    ...(activeMenu === menu ? activeNavItemStyle : {})
+                  }}
+                  onClick={() => setActiveMenu(menu)}
+                >
+                  {menu}
+                </li>
+              ))
             ) : (
               /* 일반모드일 때는 모든 메뉴 표시 */
               menuCategories.map((menu) => (
