@@ -67,8 +67,8 @@ function App() {
   /**
    * 🔄 서버 데이터 동기화
    */
-  const syncStudentData = useCallback(async () => {
-    console.log("🔄 서버 데이터 동기화 시도...");
+  const syncStudentData = useCallback(async (forceRefresh = false) => {
+    console.log(forceRefresh ? "🔄 강제 데이터 새로고침..." : "🔄 서버 데이터 동기화 시도...");
     setIsSyncing(true);
     try {
       const [studentRes, headerRes] = await Promise.all([
@@ -156,8 +156,22 @@ function App() {
           <div style={logoStyle} onClick={() => window.location.reload()}>
             I-Check
           </div>
-          <div style={statusBadgeStyle(isSyncing)}>
-            {isSyncing ? '● 동기화중' : '● 연결됨'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div style={statusBadgeStyle(isSyncing)}>
+              {isSyncing ? '● 동기화중' : '● 연결됨'}
+            </div>
+            <button
+              onClick={() => syncStudentData(true)}
+              disabled={isSyncing}
+              style={{
+                ...refreshButtonStyle(isMobile),
+                opacity: isSyncing ? 0.6 : 1,
+                cursor: isSyncing ? 'not-allowed' : 'pointer'
+              }}
+              title="엑셀 데이터 최신화"
+            >
+              🔄 {isSyncing ? '동기화중...' : '데이터 업데이트'}
+            </button>
           </div>
         </div>
 
@@ -240,8 +254,28 @@ const logoStyle = {
   color: '#3b82f6',
   cursor: 'pointer',
   letterSpacing: '-0.5px',
-  padding: '10px 0'
+  padding: '10px 0',
+  marginRight: '20px'
 };
+
+const refreshButtonStyle = (isMobile) => ({
+  padding: isMobile ? '6px 12px' : '8px 16px',
+  fontSize: isMobile ? '12px' : '13px',
+  fontWeight: '600',
+  color: '#fff',
+  backgroundColor: '#3b82f6',
+  border: 'none',
+  borderRadius: '6px',
+  transition: 'all 0.2s ease',
+  whiteSpace: 'nowrap',
+  '&:hover': {
+    backgroundColor: '#2563eb',
+    transform: 'translateY(-1px)'
+  },
+  '&:active': {
+    transform: 'translateY(0px)'
+  }
+});
 
 const navWrapperStyle = (isMobile) => ({
   overflowX: isMobile ? 'auto' : 'visible',
