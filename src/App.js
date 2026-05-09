@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // 컴포넌트 임포트
 import Ranking from './components/Ranking';
 import Attendance from './components/Attendance';
@@ -57,6 +57,29 @@ function App() {
   const { app: styles } = theme;
   const menuCategories = ['출석','생일','조회', '스케쥴', '포인트', '등록', '랭킹', '성적표', '설정'];
 
+  // 📦 메모이제이션: sharedProps 객체 캐시
+  const sharedProps = useMemo(() => ({ 
+    students: studentList, 
+    setStudents: setStudentList,
+    headers: headers 
+  }), [studentList, headers]);
+
+  // 📦 메모이제이션: 메뉴 맵 캐시
+  const menuMap = useMemo(() => ({
+    '출석': <Attendance {...sharedProps} />,
+    '생일': <Birthday {...sharedProps} />,
+    '조회': <Search {...sharedProps} />,
+    '스케쥴': <Schedule {...sharedProps} />,
+    '포인트': <Points {...sharedProps} />,
+    '랭킹': <Ranking />,
+    '등록': <Register {...sharedProps} />,
+    '성적표': <Report {...sharedProps} />,  
+    '설정': <Setting 
+      isAttendanceMode={isAttendanceMode} 
+      setIsAttendanceMode={setIsAttendanceMode} 
+    />
+  }), [sharedProps, isAttendanceMode]);
+
   // 화면 크기 실시간 감지
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -92,7 +115,7 @@ function App() {
     } finally {
       setIsSyncing(false);
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     syncStudentData(); 
@@ -113,12 +136,6 @@ function App() {
       );
     }
 
-    const sharedProps = { 
-      students: studentList, 
-      setStudents: setStudentList,
-      headers: headers 
-    };
-
     // 출석모드일 때는 출석 또는 설정 컴포넌트 표시
     if (isAttendanceMode) {
       if (activeMenu === '설정') {
@@ -129,21 +146,6 @@ function App() {
       }
       return <Attendance {...sharedProps} />;
     }
-
-    const menuMap = {
-      '출석': <Attendance {...sharedProps} />,
-      '생일': <Birthday {...sharedProps} />,
-      '조회': <Search {...sharedProps} />,
-      '스케쥴': <Schedule {...sharedProps} />,
-      '포인트': <Points {...sharedProps} />,
-      '랭킹': <Ranking />,
-      '등록': <Register {...sharedProps} />,
-      '성적표': <Report {...sharedProps} />,  
-      '설정': <Setting 
-        isAttendanceMode={isAttendanceMode} 
-        setIsAttendanceMode={setIsAttendanceMode} 
-      />
-    };
 
     return menuMap[activeMenu] || <div>선택된 메뉴가 없습니다.</div>;
   };
