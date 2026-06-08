@@ -22,6 +22,7 @@ function Birthday({ students = [] }) {
     return students
       .filter(s => {
         if (!s.생년월일) return false;
+        if (s.상태 && s.상태 !== '재원') return false;
         const month = parseInt(s.생년월일.split(/\D/)[1]);
         return month === currentMonth;
       })

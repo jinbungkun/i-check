@@ -1,70 +1,96 @@
-# Getting Started with Create React App
+# I-Check
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+I-Check는 학교/학원용 학생 관리 및 출석 시스템입니다. React 기반 웹 애플리케이션으로 Google Apps Script(GAS)와 연동하여 학생 정보, 출석, 포인트, 생일, 스케줄, 성적표 제작 기능을 제공합니다.
 
-## Available Scripts
+## 주요 기능
 
-In the project directory, you can run:
+- **출석 관리**
+  - 이름 또는 NFC 카드 ID 입력/스캔으로 출석 처리
+  - 출석 중복 검사 및 실시간 상태 메시지 표시
+  - 출석 성공 시 자동 업데이트 및 화면 자동 초기화
 
-### `npm start`
+- **학생 등록**
+  - 신규 학생 등록 폼 제공
+  - NFC 카드 태그로 ID 자동 입력
+  - 수업 스케줄, 연락처, 생년월일, 추가 필드 입력 지원
+  - 등록 전 정보 확인 알림 및 중복 ID 경고
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- **학생 조회**
+  - 이름/ID 검색으로 학생 정보 조회
+  - 출석 방문 기록을 달력으로 시각화
+  - 카드 분실/교체 기능 지원
+  - 스케줄 수정 및 저장 기능
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+- **생일 확인**
+  - 월별 생일 목록 표시
+  - D-Day 계산 및 오늘 생일 강조
+  - 이전/다음 달 탐색 기능
 
-### `npm test`
+- **스케줄 관리**
+  - 오늘 수업 및 주간 스케줄 확인
+  - 기존 학생 스케줄과 보강/체험 데이터를 함께 표시
+  - 보강/체험 일정 추가 기능
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+- **포인트 관리**
+  - 학생 검색 후 포인트 적립
+  - 빠른 버튼(100P, 300P, 500P) 및 수동 입력 지원
+  - NFC 태그로 학생 자동 조회
 
-### `npm run build`
+- **랭킹 조회**
+  - 학년군별 점수 상위 3명 표시
+  - 30초모아 / 30초번갈아 / 30초이중뛰기 기준 선택
+  - GAS 데이터 실시간 집계
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+- **성적표 템플릿**
+  - 배경 이미지 업로드 및 텍스트 요소 배치
+  - 템플릿 저장/불러오기
+  - 학생별 이미지 생성 후 ZIP 파일로 다운로드
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+- **설정**
+  - Google Apps Script URL 등록
+  - 출석모드 활성화 토글: 메뉴 숨김 + 출석 화면 우선 진입
+  - 로컬 스토리지에 설정 저장
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+## 메뉴 구성
 
-### `npm run eject`
+- 출석
+- 생일
+- 조회
+- 스케쥴
+- 포인트
+- 등록
+- 랭킹
+- 성적표
+- 설정
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+## 실행 방법
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```bash
+npm install
+npm start
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+빌드:
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+```bash
+npm run build
+```
 
-## Learn More
+## GAS 연동
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+- `설정` 메뉴에서 배포된 Google Apps Script 웹 앱 URL을 입력합니다.
+- 앱은 `getStudents`, `getHeaders`, `checkIn`, `registerStudent`, `updateStudent`, `updatePoints` 등 GAS API를 호출합니다.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## 기술 스택
 
-### Code Splitting
+- React
+- React Calendar
+- jszip
+- file-saver
+- Google Apps Script 연동
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## 기타
 
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- 브라우저 창 너비에 따라 반응형 UI가 적용됩니다.
+- 출석모드가 활성화되면 메뉴가 최소화되고 출석 화면으로 자동 이동합니다.
+- 데이터 동기화 버튼을 통해 GAS와 학생 데이터를 최신 상태로 유지합니다.
