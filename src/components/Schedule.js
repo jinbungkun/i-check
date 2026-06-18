@@ -78,6 +78,8 @@ function ScheduleView({ students = [], setStudents }) {
         studentName: targetStudent.이름 || name
       });
       setAttendanceStatus(`✅ ${name} 출석 완료되었습니다.`);
+      // 💡 출석 처리 후 보강/체험 목록 갱신
+      setTimeout(() => fetchExtras(), 300);
     } catch (error) {
       console.error('출석 저장 실패:', error);
       setAttendanceStatus(`⚠️ ${name} 출석 처리 중 오류가 발생했습니다.`);
@@ -94,7 +96,7 @@ function ScheduleView({ students = [], setStudents }) {
       window.removeEventListener('resize', handleResize);
       if (messageTimerRef.current) clearTimeout(messageTimerRef.current);
     };
-  }, []);
+  }, [students]);
 
   const fetchExtras = async () => {
     setIsSyncing(true);
@@ -224,8 +226,20 @@ function ScheduleView({ students = [], setStudents }) {
 
       let isAttended = false;
       if (checkAttendance) {
-        const lastAt = String(s?.마지막출석일 || "").replace(/\D/g, '').substring(0, 8);
-        isAttended = lastAt === todayStr;
+        if (s.isExtra) {
+          // 💡 보강/체험의 경우, 같은 이름의 정규 학생을 찾아서 출석 여부 확인
+          const matchedStudent = safeStudents.find(student => 
+            String(student?.이름).trim() === String(s?.이름).trim()
+          );
+          if (matchedStudent) {
+            const lastAt = String(matchedStudent?.마지막출석일 || "").replace(/\D/g, '').substring(0, 8);
+            isAttended = lastAt === todayStr;
+          }
+        } else {
+          // 정규 학생은 자신의 마지막출석일로 확인
+          const lastAt = String(s?.마지막출석일 || "").replace(/\D/g, '').substring(0, 8);
+          isAttended = lastAt === todayStr;
+        }
       }
 
       if (!acc[time]) acc[time] = [];
@@ -317,20 +331,28 @@ const DailyDashboard = ({ day, groupedData, isMobile, attendanceStatus, onCheckI
         </div>
         
         <div style={cardGridStyle(isMobile)}>
-          {members.map((s, i) => (
-            <div key={i} style={s.isAttended ? attendedCard(isMobile) : (s.isExtra ? extraCard(isMobile) : studentCard(isMobile))}>
-              <div style={s.isAttended ? attendBadge : (s.isExtra ? extraBadge : waitBadge)}>
-                {s.isAttended ? '출석' : (s.isExtra ? s.유형 : '대기')}
+          {members.map((s, i) => {
+            // 💡 보강은 항상 보라색 유지, 출석 여부만 배지에 반영
+            const isExtraClass = s.isExtra && s.유형 === '보강';
+            const cardStyle = isExtraClass ? extraCard(isMobile) : (s.isAttended ? attendedCard(isMobile) : (s.isExtra ? extraCard(isMobile) : studentCard(isMobile)));
+            const badgeText = isExtraClass ? (s.isAttended ? '보강/출석' : '보강') : (s.isAttended ? '출석' : (s.isExtra ? s.유형 : '대기'));
+            const badgeStyle = isExtraClass ? extraBadge : (s.isAttended ? attendBadge : (s.isExtra ? extraBadge : waitBadge));
+            
+            return (
+              <div key={i} style={cardStyle}>
+                <div style={badgeStyle}>
+                  {badgeText}
+                </div>
+                <div style={nameStyle(isMobile)}>{s.이름 || s.name || '이름 없음'}</div>
+                <div style={idStyle}>{s.isExtra ? `[${s.유형}]` : (s.ID || 'ID 없음')}</div>
+                {!s.isAttended && (!s.isExtra || s.유형 === '보강') && (
+                  <button style={checkInButtonStyle} onClick={() => onCheckIn(s)}>
+                    출석 처리
+                  </button>
+                )}
               </div>
-              <div style={nameStyle(isMobile)}>{s.이름 || s.name || '이름 없음'}</div>
-              <div style={idStyle}>{s.isExtra ? `[${s.유형}]` : (s.ID || 'ID 없음')}</div>
-              {!s.isAttended && (!s.isExtra || s.유형 === '보강') && (
-                <button style={checkInButtonStyle} onClick={() => onCheckIn(s)}>
-                  출석 처리
-                </button>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
     )) : <div style={emptyState}>수업이 없습니다.</div>}
