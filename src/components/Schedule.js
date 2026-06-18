@@ -475,6 +475,8 @@ const cardGridStyle = (isMobile) => ({ display: 'grid', gridTemplateColumns: isM
 const baseCard = (isMobile) => ({ padding: '15px 10px', borderRadius: '12px', textAlign: 'center', position: 'relative', minHeight: isMobile ? '120px' : '130px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '12px' });
 const studentCard = (isMobile) => ({ ...baseCard(isMobile), backgroundColor: '#2d303a', border: '1px solid #3d414d' });
 const attendedCard = (isMobile) => ({ ...baseCard(isMobile), backgroundColor: '#1e293b', border: '1px solid #3b82f6' });
+const attendBadge = { fontSize: '10px', backgroundColor: '#3b82f6', color: '#fff', padding: '2px 8px', borderRadius: '999px', position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)' };
+const waitBadge = { fontSize: '10px', backgroundColor: '#444', color: '#aaa', padding: '2px 8px', borderRadius: '999px', position: 'absolute', top: '10px', left: '50%', transform: 'translateX(-50%)' };
 const nameStyle = (isMobile) => ({ fontSize: isMobile ? '16px' : '17px', fontWeight: 'bold', color: '#fff', flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' });
 const attendedTextStyle = {
   fontSize: '13px',
