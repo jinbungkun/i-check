@@ -332,10 +332,10 @@ const DailyDashboard = ({ day, groupedData, isMobile, attendanceStatus, onCheckI
         
         <div style={cardGridStyle(isMobile)}>
           {members.map((s, i) => {
-            const isExtraClass = s.isExtra && s.유형 === '보강';
+            const isExtraClass = s.isExtra;
             const cardStyle = isExtraClass ? extraCard(isMobile) : (s.isAttended ? attendedCard(isMobile) : studentCard(isMobile));
-            const badgeText = isExtraClass ? '보강' : (s.isAttended ? '출석' : (s.isExtra ? s.유형 : '미출석'));
-            const badgeStyle = isExtraClass ? extraBadge : (s.isAttended ? attendBadge : (s.isExtra ? extraBadge : waitBadge));
+            const badgeText = isExtraClass ? s.유형 : (s.isAttended ? '출석' : '미출석');
+            const badgeStyle = isExtraClass ? extraBadge : (s.isAttended ? attendBadge : waitBadge);
 
             return (
               <div key={i} style={cardStyle}>
@@ -343,7 +343,7 @@ const DailyDashboard = ({ day, groupedData, isMobile, attendanceStatus, onCheckI
                 <div style={nameStyle(isMobile)}>{s.이름 || s.name || '이름 없음'}</div>
                 <div style={{ marginTop: 'auto', width: '100%' }}>
                   {s.isAttended ? (
-                    isExtraClass ? (
+                    s.isExtra ? (
                       <button style={disabledButtonStyle} disabled>✓ 출석</button>
                     ) : (
                       <div style={attendedTextStyle}>✓ 출석</div>
