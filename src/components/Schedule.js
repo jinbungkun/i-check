@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { requestGAS } from '../utils/GoogleAppScript';
+import { getStudent, updateStudent } from '../utils/DataHelper';
 
-function ScheduleView({ students = [] }) {
+function ScheduleView({ students = [], setStudents }) {
   const [viewMode, setViewMode] = useState('daily');
+  const [attendanceStatus, setAttendanceStatus] = useState('');
+  const messageTimerRef = useRef(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [extraSchedules, setExtraSchedules] = useState([]); 
   const [showModal, setShowModal] = useState(false);
@@ -26,11 +29,71 @@ function ScheduleView({ students = [] }) {
     type: '보강'
   });
 
+  const clearAttendanceStatus = useCallback(() => {
+    setAttendanceStatus('');
+  }, []);
+
+  const handleScheduleAttendance = async (scheduleStudent) => {
+    if (!scheduleStudent) return;
+    if (scheduleStudent.isExtra && scheduleStudent.유형 === '체험') {
+      setAttendanceStatus('⚠️ 체험 학생은 출석 처리 대상이 아닙니다.');
+      messageTimerRef.current = setTimeout(clearAttendanceStatus, 4000);
+      return;
+    }
+    if (messageTimerRef.current) clearTimeout(messageTimerRef.current);
+
+    const name = scheduleStudent.이름 || scheduleStudent.name || '학생';
+    const targetStudent = scheduleStudent.ID
+      ? getStudent(students, scheduleStudent.ID) || getStudent(students, name)
+      : getStudent(students, name);
+
+    if (!targetStudent) {
+      setAttendanceStatus(`⚠️ ${name} 학생 정보를 찾을 수 없습니다.`);
+      messageTimerRef.current = setTimeout(clearAttendanceStatus, 4000);
+      return;
+    }
+
+    const todayStr = getTodayFullString().replace(/\D/g, '').substring(0, 8);
+    const lastAt = String(targetStudent.마지막출석일 || '').replace(/\D/g, '').substring(0, 8);
+
+    if (lastAt === todayStr) {
+      setAttendanceStatus(`⚠️ ${name} 학생은 이미 오늘 출석 처리되었습니다.`);
+      messageTimerRef.current = setTimeout(clearAttendanceStatus, 4000);
+      return;
+    }
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit' });
+    const updatedStudent = { ...targetStudent, 마지막출석일: `${getTodayFullString()} ${timeStr}` };
+
+    if (typeof setStudents === 'function') {
+      setStudents(prev => updateStudent(prev, updatedStudent));
+    }
+
+    try {
+      await requestGAS({
+        method: 'POST',
+        action: 'checkIn',
+        studentId: targetStudent.ID,
+        studentName: targetStudent.이름 || name
+      });
+      setAttendanceStatus(`✅ ${name} 출석 완료되었습니다.`);
+    } catch (error) {
+      console.error('출석 저장 실패:', error);
+      setAttendanceStatus(`⚠️ ${name} 출석 처리 중 오류가 발생했습니다.`);
+    }
+
+    messageTimerRef.current = setTimeout(clearAttendanceStatus, 4000);
+  };
+
   useEffect(() => {
     fetchExtras(); 
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (messageTimerRef.current) clearTimeout(messageTimerRef.current);
+    };
   }, []);
 
   const fetchExtras = async () => {
@@ -124,6 +187,7 @@ function ScheduleView({ students = [] }) {
       }
     }).map(ex => ({
       ...ex,
+      이름: ex.이름 || ex.name || '',
       수업스케줄: `${ex.시간 || '시간미정'} (${ex.유형 || '보강'})`,
       isExtra: true
     }));
@@ -221,7 +285,13 @@ function ScheduleView({ students = [] }) {
 
       <main style={mainContentStyle(isMobile)}>
         {viewMode === 'daily' ? (
-          <DailyDashboard day={todayName} groupedData={getGroupedData(todayName, true)} isMobile={isMobile} />
+          <DailyDashboard
+            day={todayName}
+            groupedData={getGroupedData(todayName, true)}
+            isMobile={isMobile}
+            attendanceStatus={attendanceStatus}
+            onCheckIn={handleScheduleAttendance}
+          />
         ) : (
           <WeeklyBoard days={["월", "화", "수", "목", "금", "토"]} getGroupedData={getGroupedData} getDisplayDate={getDisplayDate} isMobile={isMobile} />
         )}
@@ -230,12 +300,13 @@ function ScheduleView({ students = [] }) {
   );
 }
 
-const DailyDashboard = ({ day, groupedData, isMobile }) => (
+const DailyDashboard = ({ day, groupedData, isMobile, attendanceStatus, onCheckIn }) => (
   <div style={{ width: '100%' }}>
     <div style={infoBarStyle(isMobile)}>
       <span>📅 <b>{day}요일</b></span>
       <span style={countTagStyle}>오늘 총 {Object.values(groupedData).flat().length}명</span>
     </div>
+    {attendanceStatus ? <div style={attendanceMessageStyle}>{attendanceStatus}</div> : null}
     
     {Object.keys(groupedData).length > 0 ? Object.entries(groupedData).map(([time, members]) => (
       <section key={time} style={timeSectorStyle(isMobile)}>
@@ -249,10 +320,15 @@ const DailyDashboard = ({ day, groupedData, isMobile }) => (
           {members.map((s, i) => (
             <div key={i} style={s.isAttended ? attendedCard(isMobile) : (s.isExtra ? extraCard(isMobile) : studentCard(isMobile))}>
               <div style={s.isAttended ? attendBadge : (s.isExtra ? extraBadge : waitBadge)}>
-                {s.isAttended ? "출석" : (s.isExtra ? s.유형 : "대기")}
+                {s.isAttended ? '출석' : (s.isExtra ? s.유형 : '대기')}
               </div>
-              <div style={nameStyle(isMobile)}>{s.이름}</div>
-              <div style={idStyle}>{s.isExtra ? `[${s.유형}]` : (s.ID || "ID 없음")}</div>
+              <div style={nameStyle(isMobile)}>{s.이름 || s.name || '이름 없음'}</div>
+              <div style={idStyle}>{s.isExtra ? `[${s.유형}]` : (s.ID || 'ID 없음')}</div>
+              {!s.isAttended && (!s.isExtra || s.유형 === '보강') && (
+                <button style={checkInButtonStyle} onClick={() => onCheckIn(s)}>
+                  출석 처리
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -314,6 +390,27 @@ const addBtnStyle = { backgroundColor: '#3b82f6', color: '#fff', border: 'none',
 const extraCard = (isMobile) => ({ ...studentCard(isMobile), border: '1px dashed #8b5cf6', backgroundColor: '#2d2142' });
 const extraBadge = { fontSize: '10px', backgroundColor: '#8b5cf6', color: '#fff', padding: '1px 6px', borderRadius: '6px', position: 'absolute', top: '8px', left: '50%', transform: 'translateX(-50%)' };
 const weeklyExtraItem = { padding: '5px 8px', backgroundColor: '#2d2142', borderRadius: '6px', marginBottom: '4px', fontSize: '12px', color: '#a78bfa', border: '1px solid #8b5cf644' };
+const attendanceMessageStyle = {
+  marginBottom: '16px',
+  padding: '12px 16px',
+  borderRadius: '12px',
+  backgroundColor: '#172554',
+  color: '#c7d2fe',
+  border: '1px solid #334155',
+  fontSize: '14px'
+};
+const checkInButtonStyle = {
+  marginTop: '12px',
+  width: '100%',
+  padding: '8px 10px',
+  borderRadius: '10px',
+  border: 'none',
+  backgroundColor: '#3b82f6',
+  color: '#fff',
+  fontWeight: '700',
+  cursor: 'pointer',
+  transition: 'transform 0.2s ease'
+};
 const modalOverlay = { position:'fixed', top:0, left:0, width:'100%', height:'100%', backgroundColor:'rgba(0,0,0,0.8)', display:'flex', justifyContent:'center', alignItems:'center', zIndex:1000 };
 const modalContent = (isMobile) => ({ backgroundColor:'#24262d', padding:isMobile?'20px':'40px', borderRadius:'20px', width:isMobile?'85%':'400px', border:'1px solid #333' });
 const inputGroup = { marginBottom:'15px' };
