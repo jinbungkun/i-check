@@ -346,8 +346,8 @@ const DailyDashboard = ({ day, groupedData, isMobile, attendanceStatus, onCheckI
                 <div style={nameStyle(isMobile)}>{s.이름 || s.name || '이름 없음'}</div>
                 <div style={idStyle}>{s.isExtra ? `[${s.유형}]` : (s.ID || 'ID 없음')}</div>
                 {!s.isAttended && (!s.isExtra || s.유형 === '보강') && (
-                  <button style={checkInButtonStyle} onClick={() => onCheckIn(s)}>
-                    출석 처리
+                  <button style={checkInButtonStyle} onClick={() => onCheckIn(s)} onMouseEnter={(e) => {e.target.style.transform = 'scale(1.05)'; e.target.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.4)'}} onMouseLeave={(e) => {e.target.style.transform = 'scale(1)'; e.target.style.boxShadow = 'none'}}>
+                    ✓ 출석
                   </button>
                 )}
               </div>
@@ -422,16 +422,18 @@ const attendanceMessageStyle = {
   fontSize: '14px'
 };
 const checkInButtonStyle = {
-  marginTop: '12px',
+  marginTop: '10px',
   width: '100%',
-  padding: '8px 10px',
-  borderRadius: '10px',
+  padding: '6px 10px',
+  borderRadius: '8px',
   border: 'none',
   backgroundColor: '#3b82f6',
   color: '#fff',
-  fontWeight: '700',
+  fontWeight: '600',
+  fontSize: '13px',
   cursor: 'pointer',
-  transition: 'transform 0.2s ease'
+  transition: 'all 0.2s ease',
+  boxShadow: 'none'
 };
 const modalOverlay = { position:'fixed', top:0, left:0, width:'100%', height:'100%', backgroundColor:'rgba(0,0,0,0.8)', display:'flex', justifyContent:'center', alignItems:'center', zIndex:1000 };
 const modalContent = (isMobile) => ({ backgroundColor:'#24262d', padding:isMobile?'20px':'40px', borderRadius:'20px', width:isMobile?'85%':'400px', border:'1px solid #333' });
@@ -454,13 +456,13 @@ const countTagStyle = { backgroundColor: '#333', padding: '2px 10px', borderRadi
 const timeSectorStyle = (isMobile) => ({ backgroundColor: '#24262d', borderRadius: '15px', padding: '15px', marginBottom: '15px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '15px', border: '1px solid #333' });
 const timeIndicatorStyle = (isMobile) => ({ minWidth: '70px', fontSize: '20px', fontWeight: 'bold', color: '#3b82f6', borderRight: isMobile ? 'none' : '1px solid #333', borderBottom: isMobile ? '1px solid #333' : 'none' });
 const cardGridStyle = (isMobile) => ({ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px', width: '100%' });
-const baseCard = (isMobile) => ({ padding: '15px 10px', borderRadius: '12px', textAlign: 'center', position: 'relative' });
+const baseCard = (isMobile) => ({ padding: '12px 10px', borderRadius: '12px', textAlign: 'center', position: 'relative', minHeight: isMobile ? '140px' : '150px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' });
 const studentCard = (isMobile) => ({ ...baseCard(isMobile), backgroundColor: '#2d303a', border: '1px solid #3d414d' });
 const attendedCard = (isMobile) => ({ ...baseCard(isMobile), backgroundColor: '#1e293b', border: '1px solid #3b82f6' });
 const attendBadge = { fontSize: '10px', backgroundColor: '#3b82f6', color: '#fff', padding: '1px 5px', borderRadius: '4px', position: 'absolute', top: '5px', left: '50%', transform: 'translateX(-50%)' };
 const waitBadge = { fontSize: '10px', backgroundColor: '#444', color: '#aaa', padding: '1px 5px', borderRadius: '4px', position: 'absolute', top: '5px', left: '50%', transform: 'translateX(-50%)' };
-const nameStyle = (isMobile) => ({ fontSize: '16px', fontWeight: 'bold', marginTop: '10px' });
-const idStyle = { fontSize: '11px', color: '#71717a' };
+const nameStyle = (isMobile) => ({ fontSize: '15px', fontWeight: 'bold', marginTop: '8px', marginBottom: '2px' });
+const idStyle = { fontSize: '10px', color: '#71717a', marginBottom: '6px' };
 const weeklyGridStyle = (isMobile) => ({ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px' });
 const weeklyColStyle = (isMobile) => ({ flex: '0 0 140px', backgroundColor: '#24262d', borderRadius: '12px', border: '1px solid #333', minHeight: '400px' });
 const weeklyDayHeader = (day) => ({ padding: '10px', textAlign: 'center', backgroundColor: '#2d303a', borderBottom: '1px solid #333', borderRadius: '12px 12px 0 0' });
