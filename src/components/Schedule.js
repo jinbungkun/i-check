@@ -332,16 +332,22 @@ const DailyDashboard = ({ day, groupedData, isMobile, attendanceStatus, onCheckI
         
         <div style={cardGridStyle(isMobile)}>
           {members.map((s, i) => {
-            // 💡 보강은 보라색, 출석자는 파란색, 미출석자는 회색
             const isExtraClass = s.isExtra && s.유형 === '보강';
-            const cardStyle = isExtraClass && !s.isAttended ? extraCard(isMobile) : (s.isAttended ? attendedCard(isMobile) : studentCard(isMobile));
-            
+            const cardStyle = isExtraClass ? extraCard(isMobile) : (s.isAttended ? attendedCard(isMobile) : studentCard(isMobile));
+            const badgeText = isExtraClass ? '보강' : (s.isAttended ? '출석' : (s.isExtra ? s.유형 : '미출석'));
+            const badgeStyle = isExtraClass ? extraBadge : (s.isAttended ? attendBadge : (s.isExtra ? extraBadge : waitBadge));
+
             return (
               <div key={i} style={cardStyle}>
+                <div style={badgeStyle}>{badgeText}</div>
                 <div style={nameStyle(isMobile)}>{s.이름 || s.name || '이름 없음'}</div>
-                <div style={{ marginTop: 'auto' }}>
+                <div style={{ marginTop: 'auto', width: '100%' }}>
                   {s.isAttended ? (
-                    <div style={attendedTextStyle}>✓ 출석</div>
+                    isExtraClass ? (
+                      <button style={disabledButtonStyle} disabled>✓ 출석</button>
+                    ) : (
+                      <div style={attendedTextStyle}>✓ 출석</div>
+                    )
                   ) : (
                     !s.isExtra || s.유형 === '보강' ? (
                       <button style={checkInButtonStyle} onClick={() => onCheckIn(s)} onMouseEnter={(e) => {e.target.style.transform = 'scale(1.05)'; e.target.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.4)'}} onMouseLeave={(e) => {e.target.style.transform = 'scale(1)'; e.target.style.boxShadow = 'none'}}>
@@ -432,6 +438,18 @@ const checkInButtonStyle = {
   fontSize: '13px',
   cursor: 'pointer',
   transition: 'all 0.2s ease'
+};
+const disabledButtonStyle = {
+  width: '100%',
+  padding: '7px 10px',
+  borderRadius: '8px',
+  border: '1px solid #3b82f6',
+  backgroundColor: '#1e293b',
+  color: '#94a3b8',
+  fontWeight: '600',
+  fontSize: '13px',
+  cursor: 'not-allowed',
+  opacity: 0.8
 };
 const modalOverlay = { position:'fixed', top:0, left:0, width:'100%', height:'100%', backgroundColor:'rgba(0,0,0,0.8)', display:'flex', justifyContent:'center', alignItems:'center', zIndex:1000 };
 const modalContent = (isMobile) => ({ backgroundColor:'#24262d', padding:isMobile?'20px':'40px', borderRadius:'20px', width:isMobile?'85%':'400px', border:'1px solid #333' });
