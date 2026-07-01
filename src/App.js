@@ -11,9 +11,9 @@ import Birthday from './components/Birthday';
 import Report from './components/Report';
 // 유틸리티 및 테마
 import { requestGAS } from './utils/GoogleAppScript';
-import { filterEssentialData } from './utils/DataHelper'; 
-import { theme } from './theme';
+import { filterEssentialData } from './utils/DataHelper';
 import { subscribeTestKey } from './utils/InputManager';
+import LoadingState from './components/common/LoadingState';
 
 /**
  * 💡 하얀 테두리 박멸 및 글로벌 스타일 주입
@@ -54,7 +54,6 @@ function App() {
     return localStorage.getItem('attendance_mode') === 'true';
   });
 
-  const { app: styles } = theme;
   const menuCategories = ['출석','생일','조회', '스케쥴', '포인트', '등록', '랭킹', '성적표', '설정'];
 
   // 📦 메모이제이션: sharedProps 객체 캐시
@@ -130,12 +129,7 @@ function App() {
    */
   const renderContent = () => {
     if (isSyncing && activeMenu !== '설정') {
-      return (
-        <div style={loadingContainerStyle}>
-          <div className="spinner" style={spinnerStyle}></div>
-          <p style={{marginTop: '15px', color: '#94a3b8', fontSize: '14px'}}>데이터를 동기화하고 있습니다...</p>
-        </div>
-      );
+      return <LoadingState message="데이터를 동기화하고 있습니다..." />;
     }
 
     // 출석모드일 때는 출석 또는 설정 컴포넌트 표시

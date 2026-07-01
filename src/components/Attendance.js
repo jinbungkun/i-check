@@ -2,12 +2,12 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'; // 💡
 import { requestGAS } from '../utils/GoogleAppScript';
 import { getStudent, updateStudent } from '../utils/DataHelper';
 import { subscribeNFC } from '../utils/InputManager';
+import StatusBanner from './common/StatusBanner';
 
 function Attendance({ students = [], setStudents }) {
   const [inputValue, setInputValue] = useState('');
-  const [status, setStatus] = useState('시스템 대기 중...');
+  const [feedback, setFeedback] = useState({ type: 'info', message: '시스템 대기 중...' });
   const [lastStudent, setLastStudent] = useState(null);
-  const [isError, setIsError] = useState(false);
   
   // 💡 타이머를 관리하기 위한 Ref (화면이 바뀌어도 유지됨)
   const timerRef = useRef(null);
@@ -23,8 +23,7 @@ function Attendance({ students = [], setStudents }) {
   // 💡 정보를 화면에서 지우는 함수
   const clearDisplay = useCallback(() => {
     setLastStudent(null);
-    setStatus('시스템 대기 중...');
-    setIsError(false);
+    setFeedback({ type: 'info', message: '시스템 대기 중...' });
   }, []);
 
   const getTodayString = () => {
@@ -41,8 +40,7 @@ function Attendance({ students = [], setStudents }) {
     const student = getStudent(students, scannedIdOrName);
 
     if (!student) {
-      setIsError(true);
-      setStatus('⚠️ 등록되지 않은 정보입니다.');
+      setFeedback({ type: 'error', message: '⚠️ 등록되지 않은 정보입니다.' });
       setInputValue('');
       // 에러 메시지도 3초 후 삭제
       timerRef.current = setTimeout(clearDisplay, 3000);
@@ -57,11 +55,9 @@ function Attendance({ students = [], setStudents }) {
     const isDuplicate = cleanLastRecord === cleanToday;
 
     if (isDuplicate) {
-      setIsError(true);
-      setStatus(`⚠️ ${student.이름} 학생은 이미 출석했습니다.`);
+      setFeedback({ type: 'error', message: `⚠️ ${student.이름} 학생은 이미 출석했습니다.` });
     } else {
-      setStatus('✅ 출석이 완료되었습니다!');
-      setIsError(false);
+      setFeedback({ type: 'success', message: '✅ 출석이 완료되었습니다!' });
     }
 
     // 학생 정보 카드 표시
@@ -147,16 +143,11 @@ function Attendance({ students = [], setStudents }) {
           <h2 style={{ fontSize: isMobile ? '22px' : '28px', fontWeight: '800', color: '#fff', marginBottom: '10px' }}>
             스마트 출석 시스템
           </h2>
-          <div style={{
-            display: 'inline-block', padding: isMobile ? '6px 15px' : '8px 20px', borderRadius: '20px',
-            backgroundColor: isError ? '#442727' : status.includes('✅') ? '#1e293b' : '#2d303a',
-            color: isError ? '#ff4d4f' : status.includes('✅') ? '#3b82f6' : '#999',
-            fontSize: isMobile ? '12px' : '14px', fontWeight: '600',
-            border: `1px solid ${isError ? '#ff4d4f' : status.includes('✅') ? '#3b82f6' : '#3d414d'}`,
-            transition: '0.3s'
-          }}>
-            {status}
-          </div>
+          <StatusBanner
+            type={feedback.type}
+            message={feedback.message}
+            style={{ display: 'inline-block', padding: isMobile ? '6px 15px' : '8px 20px', borderRadius: '20px' }}
+          />
         </div>
 
         <form onSubmit={handleSubmit} style={{ marginBottom: isMobile ? '30px' : '50px' }}>

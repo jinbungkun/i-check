@@ -3,6 +3,8 @@ import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css'; 
 import { requestGAS } from '../utils/GoogleAppScript';
 import { subscribeNFC } from '../utils/InputManager';
+import LoadingState from './common/LoadingState';
+import StatusBanner from './common/StatusBanner';
 
 function Search({ students = [], setStudents }) {
   const [query, setQuery] = useState('');
@@ -10,6 +12,7 @@ function Search({ students = [], setStudents }) {
   const [attendanceDates, setAttendanceDates] = useState([]); 
   const [isReplacing, setIsReplacing] = useState(false); 
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [status, setStatus] = useState({ type: 'info', msg: '' });
   
   // 💡 [추가] 스케줄 수정 모달 관련 상태
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -32,7 +35,10 @@ function Search({ students = [], setStudents }) {
 
   const handleSearch = async (searchId, targetDate) => {
     const target = (searchId || query).trim();
-    if (!target) return;
+    if (!target) {
+      setStatus({ type: 'info', msg: '조회할 학생 이름이나 ID를 입력해주세요.' });
+      return;
+    }
     if (targetDate) setViewDate(targetDate);
     const fetchDate = targetDate || viewDate; 
     const fetchYear = fetchDate.getFullYear();
@@ -45,6 +51,7 @@ function Search({ students = [], setStudents }) {
       setSelectedStudent(found); 
       setIsReplacing(false);
       setIsLoadingLogs(true);
+      setStatus({ type: 'loading', msg: '출석 기록을 불러오는 중입니다...' });
       try {
         const response = await requestGAS({
           method: 'GET', action: 'getLogs', studentId: found.ID, targetDate: fetchDate.toISOString() 
@@ -53,10 +60,14 @@ function Search({ students = [], setStudents }) {
         const cleanDates = rawLogs.map(log => String(log).match(/(\d{4}-\d{2}-\d{2})/)?.[1]).filter(Boolean);
         setAttendanceDates([...new Set(cleanDates)]);
         setCurrentViewYear(fetchYear);
-      } catch (e) { console.error("❌ 로그 로드 실패:", e); } 
+        setStatus({ type: 'success', msg: `${found.이름} 학생의 기록을 불러왔습니다.` });
+      } catch (e) {
+        console.error("❌ 로그 로드 실패:", e);
+        setStatus({ type: 'error', msg: '❌ 기록을 불러오지 못했습니다.' });
+      } 
       finally { setIsLoadingLogs(false); }
     } else {
-      alert("등록된 학생이 없습니다.");
+      setStatus({ type: 'error', msg: '❌ 등록된 학생이 없습니다.' });
       setSelectedStudent(null);
     }
   };
@@ -125,7 +136,7 @@ function Search({ students = [], setStudents }) {
       }
     });
     return () => unsubscribe();
-  }, [isReplacing, selectedStudent, students]);
+  }, [handleSearch, isReplacing, selectedStudent, setStudents, students]);
 
   return (
     <div style={containerStyle}>
@@ -144,6 +155,8 @@ function Search({ students = [], setStudents }) {
           <button style={searchButtonStyle} onClick={() => handleSearch()}>검색</button>
         </div>
       </header>
+
+      {status.msg && <StatusBanner type={status.type || 'info'} message={status.msg} style={{ margin: '16px 5% 0' }} />}
 
       {selectedStudent ? (
         <div style={dashboardGrid(isMobile)}>
@@ -185,7 +198,13 @@ function Search({ students = [], setStudents }) {
               {isLoadingLogs && <span style={loadingTextStyle}>조회 중...</span>}
             </div>
             <div style={calendarWrapper(isMobile)}>
-              <Calendar activeStartDate={viewDate} onActiveStartDateChange={({ activeStartDate }) => { setViewDate(activeStartDate); if (selectedStudent && activeStartDate.getFullYear() !== currentViewYear) handleSearch(selectedStudent.ID, activeStartDate); }} locale="ko-KR" calendarType="gregory" formatDay={(l, d) => d.getDate()} tileClassName={({ date, view }) => (view === 'month' && attendanceDates.includes(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`)) ? 'attended-day' : null} />
+              {isLoadingLogs ? (
+                <div style={{ padding: '20px 0' }}>
+                  <LoadingState message="출석 기록을 불러오는 중입니다..." size="small" />
+                </div>
+              ) : (
+                <Calendar activeStartDate={viewDate} onActiveStartDateChange={({ activeStartDate }) => { setViewDate(activeStartDate); if (selectedStudent && activeStartDate.getFullYear() !== currentViewYear) handleSearch(selectedStudent.ID, activeStartDate); }} locale="ko-KR" calendarType="gregory" formatDay={(l, d) => d.getDate()} tileClassName={({ date, view }) => (view === 'month' && attendanceDates.includes(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`)) ? 'attended-day' : null} />
+              )}
             </div>
           </div>
         </div>

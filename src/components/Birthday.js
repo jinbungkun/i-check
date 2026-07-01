@@ -43,7 +43,7 @@ function Birthday({ students = [] }) {
         return { ...s, day, dDayText, isToday: diffDays === 0, isPast: diffDays < 0 };
       })
       .sort((a, b) => a.day - b.day);
-  }, [students, currentMonth, today]);
+  }, [students, currentMonth, today, now, currentYear]);
 
   return (
     <div style={containerStyle}>

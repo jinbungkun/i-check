@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { requestGAS } from '../utils/GoogleAppScript';
 import { subscribeNFC } from '../utils/InputManager';
+import StatusBanner from './common/StatusBanner';
 
 function Points({ students, setStudents }) {
   const [query, setQuery] = useState('');
@@ -54,6 +55,7 @@ function Points({ students, setStudents }) {
     const nextTotal = String(currentPoint + amountToUpdate);
 
     setIsSubmitting(true);
+    setStatus({ type: 'loading', msg: '포인트를 반영하는 중입니다...' });
     setStudents(prev => prev.map(s => 
       String(s.ID).trim() === String(selectedStudent.ID).trim() 
       ? { ...s, 포인트: nextTotal } : s
@@ -69,14 +71,16 @@ function Points({ students, setStudents }) {
     }, 500);
 
     try {
-      requestGAS({
+      await requestGAS({
         method: 'POST',
         action: 'updatePoints',
         studentId: selectedStudent.ID,
         amount: amountToUpdate
       });
+      setStatus({ type: 'success', msg: `✅ ${selectedStudent.이름} 학생 포인트가 반영되었습니다.` });
     } catch (error) {
-      console.error("서버 저장 실패");
+      console.error("서버 저장 실패", error);
+      setStatus({ type: 'error', msg: '❌ 서버 저장에 실패했습니다.' });
     }
   };
 
@@ -99,7 +103,7 @@ function Points({ students, setStudents }) {
           <button style={activeTab} onClick={() => handleSearch()}>조회</button>
         </div>
 
-        {status.msg && <div style={statusBanner(status.type)}>{status.msg}</div>}
+        {status.msg && <StatusBanner type={status.type || 'info'} message={status.msg} style={{ marginBottom: '20px' }} />}
 
         {selectedStudent ? (
           <div style={contentLayout(isMobile)}>

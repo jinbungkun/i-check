@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { requestGAS } from '../utils/GoogleAppScript';
 import { subscribeNFC } from '../utils/InputManager';
+import StatusBanner from './common/StatusBanner';
 
 function Register({ students, setStudents, headers = [] }) {
   const [formData, setFormData] = useState({});
@@ -30,7 +31,7 @@ function Register({ students, setStudents, headers = [] }) {
       });
       setFormData(prev => ({ ...initialData, ...prev }));
     }
-  }, [headers]);
+  }, [headers, excludeFields]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -87,6 +88,7 @@ NFC ID: ${formData.ID}
     }
 
     setIsSubmitting(true);
+    setStatus({ type: 'loading', msg: '등록 요청을 보내는 중입니다...' });
     try {
       const studentDataForGAS = {};
       Object.keys(formData).forEach(key => {
@@ -124,7 +126,7 @@ NFC ID: ${formData.ID}
           <h2 style={titleStyle(isMobile)}>신규 학생 등록</h2>
         </header>
 
-        {status.msg && <div style={statusBanner(status.type)}>{status.msg}</div>}
+        {status.msg && <StatusBanner type={status.type || 'info'} message={status.msg} style={{ marginBottom: '20px' }} />}
 
         <form onSubmit={handleSubmit} style={formStyle}>
           <div style={inputGrid(isMobile)}>

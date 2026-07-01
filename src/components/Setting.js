@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { theme } from '../theme';
 
 function Setting({ isAttendanceMode, setIsAttendanceMode }) {
   const [gasUrl, setGasUrl] = useState('');
