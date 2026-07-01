@@ -51,7 +51,7 @@ function Attendance({ students = [], setStudents }) {
 
     const today = getTodayString();
     const cleanToday = today.replace(/\D/g, '');
-    const cleanLastRecord = String(student.마지막출석일 || "").replace(/\D/g, '').substring(0, 8);
+    const cleanLastRecord = String(student.lastAttendanceDate || student.마지막출석일 || "").replace(/\D/g, '').substring(0, 8);
 
     // 중복 출석 여부 확인
     const isDuplicate = cleanLastRecord === cleanToday;
@@ -69,7 +69,8 @@ function Attendance({ students = [], setStudents }) {
     const timeStr = now.toLocaleTimeString('ko-KR', { hour12: false, hour: '2-digit', minute: '2-digit' });
     const displayData = { 
       ...student, 
-      마지막출석일: isDuplicate ? student.마지막출석일 : `${today} ${timeStr}`,
+      lastAttendanceDate: isDuplicate ? student.lastAttendanceDate || student.마지막출석일 : `${today} ${timeStr}`,
+      마지막출석일: isDuplicate ? student.lastAttendanceDate || student.마지막출석일 : `${today} ${timeStr}`,
       isDuplicate 
     };
 
@@ -85,8 +86,8 @@ function Attendance({ students = [], setStudents }) {
         await requestGAS({
           method: 'POST',
           action: 'checkIn',
-          studentId: student.ID,
-          studentName: student.이름
+          studentId: student.id || student.ID,
+          studentName: student.name || student.이름
         });
       } catch (error) {
         console.error("네트워크 에러:", error);

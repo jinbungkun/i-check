@@ -100,7 +100,7 @@ NFC ID: ${formData.ID}
         studentData: studentDataForGAS 
       });
       
-      if (response.status === "success") {
+      if (response?.ok) {
         setStatus({ type: 'success', msg: `✅ ${formData.이름} 등록 완료!` });
         if (setStudents) setStudents(prev => [...prev, { ...formData, 마지막출석일: '' }]);
         

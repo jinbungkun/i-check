@@ -99,14 +99,16 @@ function App() {
         requestGAS({ action: 'getHeaders' })
       ]);
       
-      if (studentRes.status === "success") {
+      if (studentRes?.ok) {
         const refinedData = filterEssentialData(studentRes.data);
         setStudentList(refinedData);
       }
 
-      if (Array.isArray(headerRes)) {
+      if (Array.isArray(headerRes?.data)) {
+        setHeaders(headerRes.data);
+      } else if (Array.isArray(headerRes)) {
         setHeaders(headerRes);
-      } else if (headerRes && headerRes.data) {
+      } else if (headerRes?.data) {
         setHeaders(headerRes.data);
       }
       console.log("✅ 동기화 완료");
