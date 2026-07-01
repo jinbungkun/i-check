@@ -52,7 +52,9 @@ function doGet(e) {
   try {
     if (action === "getStudents") return handleGetStudents(ss);
     if (action === "getLogs") return handleGetLogs(ss, e.parameter.studentId, e.parameter.targetDate);
-    if (action === "getExtraSchedules") return handleGetExtraSchedules(ss);
+    if (action === "getExtraSchedules") {
+      return handleGetExtraSchedules(ss, e.parameter.startDate, e.parameter.endDate);
+    }
     if (action === "getHeaders") {
       var sheet = ss.getSheetByName(SHEET_NAME);
       var lastCol = sheet.getLastColumn();
@@ -132,8 +134,12 @@ function doPost(e) {
 
 // --- 보강/체험 관련 함수 ---
 
-function handleGetExtraSchedules(ss) {
+function handleGetExtraSchedules(ss, startDate, endDate) {
   var sheet = ss.getSheetByName(EXTRA_SHEET_NAME);
+  if (!sheet) {
+    return returnJson(buildResponse({ ok: true, action: "getExtraSchedules", data: [] }));
+  }
+  
   var data = sheet.getDataRange().getDisplayValues();
 
   if (data.length <= 1) {
@@ -141,25 +147,33 @@ function handleGetExtraSchedules(ss) {
   }
 
   var headers = data.shift();
-  var now = new Date();
-
-  var day = now.getDay();
-  var diff = now.getDate() - day + (day === 0 ? -6 : 1);
-  var monday = new Date(now.setDate(diff));
-  monday.setHours(0, 0, 0, 0);
-  var sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  sunday.setHours(23, 59, 59, 999);
+  
+  var startLimit = startDate ? String(startDate).replace(/\D/g, '') : ""; // "20260702"
+  var endLimit = endDate ? String(endDate).replace(/\D/g, '') : "";
 
   var result = data.map(function(row) {
     var obj = {};
     headers.forEach(function(h, i) {
-      obj[h] = row[i];
+      var cleanHeader = normalizeHeaderName(h);
+      obj[cleanHeader] = row[i];
+      if (h !== cleanHeader) {
+        obj[h] = row[i];
+      }
     });
     return obj;
   }).filter(function(item) {
-    var itemDate = new Date(item["날짜"]).getTime();
-    return itemDate >= monday.getTime() && itemDate <= sunday.getTime();
+    var rawDate = item["날짜"] || item["date"] || "";
+    if (!rawDate) return false;
+    
+    // 안전한 날짜 정규화
+    var cleanDate = String(rawDate).replace(/\D/g, '').substring(0, 8); // "20260702"
+    if (!cleanDate) return false;
+
+    // 만약 startDate와 endDate 범위가 지정되었다면 그 범위로 필터링
+    if (startLimit && cleanDate < startLimit) return false;
+    if (endLimit && cleanDate > endLimit) return false;
+    
+    return true;
   });
 
   return returnJson(buildResponse({ ok: true, action: "getExtraSchedules", data: result }));

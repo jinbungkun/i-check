@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
 import { requestGAS } from '../utils/GoogleAppScript';
 import { getStudent, updateStudent } from '../utils/DataHelper';
 
@@ -10,6 +12,8 @@ function ScheduleView({ students = [], setStudents }) {
   const [extraSchedules, setExtraSchedules] = useState([]); 
   const [showModal, setShowModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [activeMonth, setActiveMonth] = useState(new Date());
 
   const days = ["일", "월", "화", "수", "목", "금", "토"];
   const now = new Date();
@@ -32,6 +36,115 @@ function ScheduleView({ students = [], setStudents }) {
   const clearAttendanceStatus = useCallback(() => {
     setAttendanceStatus('');
   }, []);
+
+  const formatDateKey = (date) => {
+    if (!date) return '';
+    const targetDate = date instanceof Date ? date : new Date(date);
+    if (Number.isNaN(targetDate.getTime())) return '';
+    return `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}-${String(targetDate.getDate()).padStart(2, '0')}`;
+  };
+
+  const parseExtraDateKey = (rawValue) => {
+    if (!rawValue && rawValue !== 0) return '';
+    const value = String(rawValue).trim();
+    if (!value) return '';
+
+    const isoMatch = value.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+    if (isoMatch) {
+      const [, year, month, day] = isoMatch;
+      return `${year}-${String(Number(month)).padStart(2, '0')}-${String(Number(day)).padStart(2, '0')}`;
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return formatDateKey(parsed);
+  };
+
+  const parseLocalDate = (dateKey) => {
+    if (!dateKey) return null;
+    const parts = String(dateKey).match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (!parts) return null;
+    const [, year, month, day] = parts;
+    return new Date(Number(year), Number(month) - 1, Number(day));
+  };
+
+  const getWeekRange = (baseDate = new Date()) => {
+    const start = new Date(baseDate);
+    const day = start.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    start.setDate(start.getDate() + diff);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+
+    return { start, end };
+  };
+
+  const normalizeExtraSchedules = (items) => {
+    if (!Array.isArray(items)) return [];
+    return items.map(item => {
+      if (!item) return null;
+      if (Array.isArray(item)) {
+        const [date, name, time, type] = item;
+        return { 날짜: date, 이름: name, 시간: time, 유형: type };
+      }
+      if (typeof item === 'object') {
+        return {
+          날짜: item['날짜'] ?? item['date'] ?? item['Date'] ?? '',
+          이름: item['이름'] ?? item['name'] ?? item['Name'] ?? '',
+          시간: item['시간'] ?? item['time'] ?? item['Time'] ?? '',
+          유형: item['유형'] ?? item['type'] ?? item['Type'] ?? '보강'
+        };
+      }
+      return null;
+    }).filter(Boolean);
+  };
+
+  // fetchExtras: useCallback으로 감싸서 안정적인 참조 유지
+  const fetchExtras = useCallback(async (startDate, endDate) => {
+    setIsSyncing(true);
+    try {
+      const res = await requestGAS({ 
+        action: 'getExtraSchedules',
+        startDate: startDate || '',
+        endDate: endDate || ''
+      });
+      const actualData = res?.data || res; 
+      if (Array.isArray(actualData)) {
+        setExtraSchedules(prev => {
+          const normalized = normalizeExtraSchedules(actualData);
+          return normalized;
+        });
+      } else {
+        setExtraSchedules([]);
+      }
+    } catch (e) { 
+      console.error("보강 데이터 로드 실패", e); 
+      setExtraSchedules([]);
+    } finally {
+      setIsSyncing(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const refreshCurrentSchedules = useCallback((currentMode, currentMonth) => {
+    const mode = currentMode || viewMode;
+    const month = currentMonth || activeMonth;
+    if (mode === 'daily') {
+      const todayStr = formatDateKey(new Date());
+      fetchExtras(todayStr, todayStr);
+    } else if (mode === 'weekly') {
+      const { start, end } = getWeekRange(new Date());
+      fetchExtras(formatDateKey(start), formatDateKey(end));
+    } else if (mode === 'monthly') {
+      const start = new Date(month.getFullYear(), month.getMonth(), 1);
+      const end = new Date(month.getFullYear(), month.getMonth() + 1, 0);
+      fetchExtras(formatDateKey(start), formatDateKey(end));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, activeMonth, fetchExtras]);
 
   const handleScheduleAttendance = async (scheduleStudent) => {
     if (!scheduleStudent) return;
@@ -78,8 +191,8 @@ function ScheduleView({ students = [], setStudents }) {
         studentName: targetStudent.이름 || name
       });
       setAttendanceStatus(`✅ ${name} 출석 완료되었습니다.`);
-      // 💡 출석 처리 후 보강/체험 목록 갱신
-      setTimeout(() => fetchExtras(), 300);
+      // 출석 후 현재 모드에 맞는 목록 새로고침
+      setTimeout(() => refreshCurrentSchedules(), 300);
     } catch (error) {
       console.error('출석 저장 실패:', error);
       setAttendanceStatus(`⚠️ ${name} 출석 처리 중 오류가 발생했습니다.`);
@@ -88,30 +201,35 @@ function ScheduleView({ students = [], setStudents }) {
     messageTimerRef.current = setTimeout(clearAttendanceStatus, 4000);
   };
 
+  // ─────────────────────────────────────────────
+  // 📡 탭/월 변경 시에만 데이터 새로 로드
+  //   - daily: 오늘 하루만
+  //   - weekly: 이번 주 월~일
+  //   - monthly: activeMonth의 1일~말일  (selectedDate 변경은 여기 포함 안 됨)
+  // ─────────────────────────────────────────────
   useEffect(() => {
-    fetchExtras(); 
+    if (viewMode === 'daily') {
+      const todayStr = formatDateKey(new Date());
+      fetchExtras(todayStr, todayStr);
+    } else if (viewMode === 'weekly') {
+      const { start, end } = getWeekRange(new Date());
+      fetchExtras(formatDateKey(start), formatDateKey(end));
+    } else if (viewMode === 'monthly') {
+      const start = new Date(activeMonth.getFullYear(), activeMonth.getMonth(), 1);
+      const end = new Date(activeMonth.getFullYear(), activeMonth.getMonth() + 1, 0);
+      fetchExtras(formatDateKey(start), formatDateKey(end));
+    }
+  // activeMonth, viewMode, fetchExtras만 의존 — selectedDate는 의도적으로 제외
+  }, [viewMode, activeMonth, fetchExtras]);
+
+  useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
     return () => {
       window.removeEventListener('resize', handleResize);
       if (messageTimerRef.current) clearTimeout(messageTimerRef.current);
     };
-  }, [students]);
-
-  const fetchExtras = async () => {
-    setIsSyncing(true);
-    try {
-      const res = await requestGAS({ action: 'getExtraSchedules' });
-      const actualData = res?.data || res; 
-      if (Array.isArray(actualData)) {
-        setExtraSchedules(actualData);
-      }
-    } catch (e) { 
-      console.error("보강 데이터 로드 실패", e); 
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+  }, []);
 
   // 💡 모달 열기: 열 때마다 날짜를 오늘로 최신화
   const handleOpenModal = () => {
@@ -143,9 +261,9 @@ function ScheduleView({ students = [], setStudents }) {
       const res = await requestGAS(payload);
       const result = res?.data || res;
       
-      if (result.status === "success") {
+      if (result.status === "success" || result.ok) {
         // 3️⃣ 뒤에서 성공하면 목록만 살짝 새로고침
-        fetchExtras(); 
+        refreshCurrentSchedules(); 
       }
     } catch (e) { 
       // 실패했을 때만 알려줌
@@ -162,16 +280,18 @@ function ScheduleView({ students = [], setStudents }) {
     return `${String(targetDate.getMonth() + 1).padStart(2, '0')}/${String(targetDate.getDate()).padStart(2, '0')}`;
   };
 
- const getGroupedData = (targetDay, checkAttendance = false) => {
+  const getGroupedData = (targetDayOrDate, checkAttendance = false, scope = 'daily') => {
     const todayStr = getTodayFullString().replace(/\D/g, '');
     const safeStudents = Array.isArray(students) ? students : [];
+    const isDateMode = targetDayOrDate instanceof Date;
+    const targetDay = isDateMode ? days[targetDayOrDate.getDay()] : targetDayOrDate;
+    const targetDateKey = isDateMode ? formatDateKey(targetDayOrDate) : null;
+    const weekRange = scope === 'weekly' ? getWeekRange(targetDayOrDate instanceof Date ? targetDayOrDate : new Date()) : null;
 
-    // 1. 해당 요일에 수업이 있는 학생만 필터링
-  const dayStudents = safeStudents.filter(s => {
+    // 1. 해당 요일에 수업이 있는 학생만 필터링 (정규)
+    const dayStudents = safeStudents.filter(s => {
       const schedule = s?.수업스케줄 || s?.["수업 스케줄"] || "";
-      // ✨ 추가된 조건: 상태가 '재원'인 경우만 포함 (비어있거나 다른 값이면 제외)
       const isActive = s?.상태 === "재원"; 
-      
       return schedule.includes(targetDay) && isActive;
     });
 
@@ -179,11 +299,25 @@ function ScheduleView({ students = [], setStudents }) {
     const dayExtras = extraSchedules.filter(ex => {
       try {
         if (!ex.날짜) return false;
-        const dateMatch = String(ex.날짜).match(/\d{4}-\d{2}-\d{2}/);
-        if (!dateMatch) return false;
-        const [y, m, d] = dateMatch[0].split('-').map(Number);
-        const exDate = new Date(y, m - 1, d);
-        return days[exDate.getDay()] === targetDay;
+        const extraDateKey = parseExtraDateKey(ex.날짜);
+        if (!extraDateKey) return false;
+
+        // 주간 보기의 경우: 해당 주 범위 내에 들고 요일이 맞는지 체크
+        if (scope === 'weekly' && weekRange) {
+          const exDate = parseLocalDate(extraDateKey);
+          if (!exDate) return false;
+          if (exDate < weekRange.start || exDate > weekRange.end) return false;
+          return days[exDate.getDay()] === targetDay;
+        }
+
+        // 일간 / 월간 보기의 경우: 날짜 키가 정확히 일치하는지 체크
+        if (targetDateKey) {
+          return extraDateKey === targetDateKey;
+        }
+
+        // 기본 백업: 요일만 비교
+        const exDate = parseLocalDate(extraDateKey);
+        return exDate ? days[exDate.getDay()] === targetDay : false;
       } catch (e) {
         return false;
       }
@@ -196,7 +330,7 @@ function ScheduleView({ students = [], setStudents }) {
 
     const combined = [...dayStudents, ...dayExtras];
 
-    // 3. 시간대별 그룹화 로직 핵심 수정
+    // 3. 시간대별 그룹화
     const grouped = combined.reduce((acc, s) => {
       let time = "시간미정";
 
@@ -206,39 +340,35 @@ function ScheduleView({ students = [], setStudents }) {
         time = timeMatch ? timeMatch[0] : "시간미정";
       } else {
         const scheduleStr = s?.수업스케줄 || s?.["수업 스케줄"] || "";
-        
-        // 💡 수정 포인트: 현재 요일(targetDay) 바로 뒤에 오는 시간만 추출
-        // 예: '화17:00, 목18:00' 에서 targetDay가 '목'이면 '18:00'을 가져옴
         const daySpecificRegex = new RegExp(`${targetDay}\\s*(\\d{1,2}:\\d{2})`);
         const match = scheduleStr.match(daySpecificRegex);
         
         if (match) {
           time = match[1]; 
         } else {
-          // 예외 상황 대비 첫 시간 추출
           const firstTimeMatch = scheduleStr.match(/(\d{1,2}:\d{2})/);
           time = firstTimeMatch ? firstTimeMatch[0] : "시간미정";
         }
       }
 
-      // 시간 포맷 통일 (9:00 -> 09:00) 하여 정렬 오류 방지
       if (time !== "시간미정" && /^\d:\d{2}$/.test(time)) time = "0" + time;
 
       let isAttended = false;
       if (checkAttendance) {
+        // 비교 날짜: targetDateKey가 있으면 해당 날짜(예: "20260702"), 없으면 오늘 날짜
+        const compareDateStr = targetDateKey ? targetDateKey.replace(/\D/g, '') : todayStr;
+
         if (s.isExtra) {
-          // 💡 보강/체험의 경우, 같은 이름의 정규 학생을 찾아서 출석 여부 확인
           const matchedStudent = safeStudents.find(student => 
             String(student?.이름).trim() === String(s?.이름).trim()
           );
           if (matchedStudent) {
             const lastAt = String(matchedStudent?.마지막출석일 || "").replace(/\D/g, '').substring(0, 8);
-            isAttended = lastAt === todayStr;
+            isAttended = lastAt === compareDateStr;
           }
         } else {
-          // 정규 학생은 자신의 마지막출석일로 확인
           const lastAt = String(s?.마지막출석일 || "").replace(/\D/g, '').substring(0, 8);
-          isAttended = lastAt === todayStr;
+          isAttended = lastAt === compareDateStr;
         }
       }
 
@@ -247,15 +377,97 @@ function ScheduleView({ students = [], setStudents }) {
       return acc;
     }, {});
 
-    // 시간순 정렬 후 반환
     return Object.keys(grouped).sort().reduce((obj, key) => {
       obj[key] = grouped[key];
       return obj;
     }, {});
   };
 
+  const hasSchedulesOnDay = (targetDay, targetDate = null) => {
+    const safeStudents = Array.isArray(students) ? students : [];
+    const targetKey = targetDate ? formatDateKey(targetDate) : null;
+
+    const hasRegularSchedule = safeStudents.some((student) => {
+      const schedule = student?.수업스케줄 || student?.['수업 스케줄'] || '';
+      return schedule.includes(targetDay) && student?.상태 === '재원';
+    });
+
+    const hasExtraSchedule = Array.isArray(extraSchedules) && extraSchedules.some((extra) => {
+      if (!extra?.날짜) return false;
+      const extraDateKey = parseExtraDateKey(extra.날짜);
+      if (!extraDateKey) return false;
+      if (targetKey) {
+        return extraDateKey === targetKey;
+      }
+      const parsedDate = parseLocalDate(extraDateKey);
+      return parsedDate ? days[parsedDate.getDay()] === targetDay : false;
+    });
+
+    return hasRegularSchedule || hasExtraSchedule;
+  };
+
+  const getMarkedDatesForMonth = (year, month) => {
+    const marked = new Set();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    for (let cursor = new Date(firstDay); cursor <= lastDay; cursor.setDate(cursor.getDate() + 1)) {
+      const weekday = days[cursor.getDay()];
+      if (hasSchedulesOnDay(weekday, cursor)) {
+        marked.add(formatDateKey(cursor));
+      }
+    }
+
+    return marked;
+  };
+
   return (
     <div style={containerStyle}>
+      <style>{`
+        .react-calendar {
+          background: transparent;
+          border: none;
+          color: #f8fafc;
+          width: 100%;
+          font-family: inherit;
+        }
+        .react-calendar__navigation button {
+          color: #fff;
+          font-weight: 700;
+        }
+        .react-calendar__navigation button:enabled:hover,
+        .react-calendar__navigation button:enabled:focus {
+          background-color: #334155;
+        }
+        .react-calendar__month-view__weekdays {
+          color: #94a3b8;
+          text-transform: uppercase;
+          font-weight: bold;
+        }
+        .react-calendar__tile {
+          color: #f8fafc;
+          border-radius: 10px;
+          padding: 12px 0;
+          min-height: 48px;
+          transition: all 0.2s ease;
+        }
+        .react-calendar__tile:enabled:hover,
+        .react-calendar__tile:enabled:focus {
+          background: #334155;
+        }
+        .react-calendar__tile--active {
+          background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+          color: white !important;
+        }
+        .react-calendar__tile--now {
+          border: 1px solid #f59e0b;
+          background: #1f2937;
+        }
+        .react-calendar__tile.has-schedule {
+          background: rgba(59, 130, 246, 0.15);
+          border: 1px solid rgba(59, 130, 246, 0.4);
+        }
+      `}</style>
       <header style={headerStyle(isMobile)}>
         <div style={headerTextWrapper(isMobile)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -268,6 +480,7 @@ function ScheduleView({ students = [], setStudents }) {
         <div style={tabGroupStyle(isMobile)}>
           <button onClick={() => setViewMode('daily')} style={viewMode === 'daily' ? activeTab(isMobile) : inactiveTab(isMobile)}>오늘</button>
           <button onClick={() => setViewMode('weekly')} style={viewMode === 'weekly' ? activeTab(isMobile) : inactiveTab(isMobile)}>주간</button>
+          <button onClick={() => setViewMode('monthly')} style={viewMode === 'monthly' ? activeTab(isMobile) : inactiveTab(isMobile)}>월간</button>
         </div>
       </header>
 
@@ -301,13 +514,33 @@ function ScheduleView({ students = [], setStudents }) {
         {viewMode === 'daily' ? (
           <DailyDashboard
             day={todayName}
-            groupedData={getGroupedData(todayName, true)}
+            groupedData={getGroupedData(new Date(), true, 'daily')}
             isMobile={isMobile}
             attendanceStatus={attendanceStatus}
             onCheckIn={handleScheduleAttendance}
           />
-        ) : (
+        ) : viewMode === 'weekly' ? (
           <WeeklyBoard days={["월", "화", "수", "목", "금", "토"]} getGroupedData={getGroupedData} getDisplayDate={getDisplayDate} isMobile={isMobile} />
+        ) : (
+          <MonthlyBoard
+            selectedDate={selectedDate}
+            currentMonth={activeMonth}
+            markedDates={getMarkedDatesForMonth(activeMonth.getFullYear(), activeMonth.getMonth())}
+            onSelectDate={(date) => {
+              // 날짜 클릭 시: selectedDate만 변경 → API 재호출 없음
+              setSelectedDate(date);
+            }}
+            onActiveStartDateChange={({ activeStartDate }) => {
+              // 달 이동 시: activeMonth 변경 → useEffect가 새 달 데이터 로드
+              if (activeStartDate) setActiveMonth(activeStartDate);
+            }}
+            groupedData={getGroupedData(selectedDate, true, 'monthly')}
+            isLoading={isSyncing}
+            isMobile={isMobile}
+            dayName={days[selectedDate.getDay()]}
+            attendanceStatus={attendanceStatus}
+            onCheckIn={handleScheduleAttendance}
+          />
         )}
       </main>
     </div>
@@ -368,7 +601,7 @@ const DailyDashboard = ({ day, groupedData, isMobile, attendanceStatus, onCheckI
 const WeeklyBoard = ({ days, getGroupedData, getDisplayDate, isMobile }) => (
   <div style={weeklyGridStyle(isMobile)}>
     {days.map(day => {
-      const grouped = getGroupedData(day, false);
+      const grouped = getGroupedData(day, false, 'weekly');
       return (
         <div key={day} style={weeklyColStyle(isMobile)}>
           <div style={weeklyDayHeader(day)}>
@@ -395,6 +628,111 @@ const WeeklyBoard = ({ days, getGroupedData, getDisplayDate, isMobile }) => (
         </div>
       );
     })}
+  </div>
+);
+
+const MonthlyBoard = ({ 
+  selectedDate, 
+  currentMonth, 
+  markedDates, 
+  onSelectDate, 
+  onActiveStartDateChange, 
+  groupedData, 
+  isLoading, 
+  isMobile, 
+  dayName,
+  attendanceStatus,
+  onCheckIn
+}) => (
+  <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div style={infoBarStyle(isMobile)}>
+      <span>📅 <b>{currentMonth.getFullYear()}년 {currentMonth.getMonth() + 1}월</b></span>
+      <span style={countTagStyle}>{dayName}요일 기준</span>
+    </div>
+
+    <div style={calendarCardStyle(isMobile)}>
+      <Calendar
+        value={selectedDate}
+        activeStartDate={currentMonth}
+        onChange={onSelectDate}
+        onActiveStartDateChange={onActiveStartDateChange}
+        locale="ko-KR"
+        calendarType="gregory"
+        formatDay={(locale, date) => date.getDate()}
+        tileClassName={({ date, view }) => 
+          (view === 'month' && markedDates.has(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`)) 
+            ? 'has-schedule' 
+            : null
+        }
+        tileContent={({ date, view }) => 
+          view === 'month' && markedDates.has(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`) 
+            ? <div style={{ fontSize: '9px', color: '#3b82f6', marginTop: '2px' }}>●</div> 
+            : null
+        }
+      />
+    </div>
+
+    <div style={calendarDetailPanelStyle(isMobile)}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <h3 style={{ margin: 0, color: '#fff' }}>{selectedDate.getMonth() + 1}/{selectedDate.getDate()} ({dayName}) 일정</h3>
+        <span style={countTagStyle}>총 {Object.values(groupedData).flat().length}명</span>
+      </div>
+
+      {attendanceStatus ? <div style={attendanceMessageStyle}>{attendanceStatus}</div> : null}
+
+      {isLoading ? (
+        <div style={emptyState}>일정을 불러오는 중입니다...</div>
+      ) : Object.keys(groupedData).length > 0 ? Object.entries(groupedData).map(([time, members]) => (
+        <section key={time} style={timeSectorStyle(isMobile)}>
+          <div style={timeIndicatorStyle(isMobile)}>
+            {time}
+            <div style={timeCountStyle}>{members.length}명</div>
+          </div>
+          
+          <div style={cardGridStyle(isMobile)}>
+            {members.map((s, i) => {
+              const isExtraClass = s.isExtra;
+              const cardStyle = isExtraClass ? extraCard(isMobile) : (s.isAttended ? attendedCard(isMobile) : studentCard(isMobile));
+              const badgeText = isExtraClass ? s.유형 : (s.isAttended ? '출석' : '미출석');
+              const badgeStyle = isExtraClass ? extraBadge : (s.isAttended ? attendBadge : waitBadge);
+
+              return (
+                <div key={i} style={cardStyle}>
+                  <div style={badgeStyle}>{badgeText}</div>
+                  <div style={nameStyle(isMobile)}>{s.이름 || s.name || '이름 없음'}</div>
+                  <div style={{ marginTop: 'auto', width: '100%' }}>
+                    {s.isAttended ? (
+                      s.isExtra ? (
+                        <button style={disabledButtonStyle} disabled>✓ 출석</button>
+                      ) : (
+                        <div style={attendedTextStyle}>✓ 출석</div>
+                      )
+                    ) : (
+                      !s.isExtra || s.유형 === '보강' ? (
+                        <button 
+                          style={checkInButtonStyle} 
+                          onClick={() => onCheckIn(s)} 
+                          onMouseEnter={(e) => {
+                            e.target.style.transform = 'scale(1.05)'; 
+                            e.target.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.4)';
+                          }} 
+                          onMouseLeave={(e) => {
+                            e.target.style.transform = 'scale(1)'; 
+                            e.target.style.boxShadow = 'none';
+                          }}
+                        >
+                          ✓ 출석
+                        </button>
+                      ) : null
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )) : <div style={emptyState}>일정이 없습니다.</div>}
+    </div>
   </div>
 );
 
@@ -425,7 +763,9 @@ const attendanceMessageStyle = {
   backgroundColor: '#172554',
   color: '#c7d2fe',
   border: '1px solid #334155',
-  fontSize: '14px'
+  fontSize: '14px',
+  width: '100%',
+  boxSizing: 'border-box'
 };
 const checkInButtonStyle = {
   width: '100%',
@@ -469,8 +809,8 @@ const activeTab = (isMobile) => ({ ...tabBase(isMobile), backgroundColor: '#3b82
 const inactiveTab = (isMobile) => ({ ...tabBase(isMobile), backgroundColor: 'transparent', color: '#666' });
 const infoBarStyle = (isMobile) => ({ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' });
 const countTagStyle = { backgroundColor: '#333', padding: '2px 10px', borderRadius: '10px', color: '#3b82f6', fontSize: '12px' };
-const timeSectorStyle = (isMobile) => ({ backgroundColor: '#24262d', borderRadius: '15px', padding: '15px', marginBottom: '15px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '15px', border: '1px solid #333' });
-const timeIndicatorStyle = (isMobile) => ({ minWidth: '70px', fontSize: '20px', fontWeight: 'bold', color: '#3b82f6', borderRight: isMobile ? 'none' : '1px solid #333', borderBottom: isMobile ? '1px solid #333' : 'none' });
+const timeSectorStyle = (isMobile) => ({ backgroundColor: '#24262d', borderRadius: '15px', padding: '15px', marginBottom: '15px', display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '15px', border: '1px solid #333', width: '100%', boxSizing: 'border-box' });
+const timeIndicatorStyle = (isMobile) => ({ minWidth: '70px', fontSize: '20px', fontWeight: 'bold', color: '#3b82f6', borderRight: isMobile ? 'none' : '1px solid #333', borderBottom: isMobile ? '1px solid #333' : 'none', paddingBottom: isMobile ? '8px' : '0' });
 const cardGridStyle = (isMobile) => ({ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px', width: '100%' });
 const baseCard = (isMobile) => ({ padding: '15px 10px', borderRadius: '12px', textAlign: 'center', position: 'relative', minHeight: isMobile ? '120px' : '130px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '12px' });
 const studentCard = (isMobile) => ({ ...baseCard(isMobile), backgroundColor: '#2d303a', border: '1px solid #3d414d' });
@@ -492,6 +832,23 @@ const weeklyColStyle = (isMobile) => ({ flex: '0 0 140px', backgroundColor: '#24
 const weeklyDayHeader = (day) => ({ padding: '10px', textAlign: 'center', backgroundColor: '#2d303a', borderBottom: '1px solid #333', borderRadius: '12px 12px 0 0' });
 const smallTimeLabel = { fontSize: '11px', color: '#3b82f6', fontWeight: 'bold' };
 const weeklyNameItem = { padding: '5px 8px', backgroundColor: '#1a1c23', borderRadius: '6px', marginBottom: '4px', fontSize: '12px', border: '1px solid #333' };
-const emptyState = { textAlign: 'center', padding: '40px', color: '#555' };
+const emptyState = { textAlign: 'center', padding: '40px', color: '#555', width: '100%' };
+
+const calendarCardStyle = (isMobile) => ({ 
+  background: 'linear-gradient(180deg, rgba(36,38,45,0.98), rgba(31,41,55,0.95))', 
+  borderRadius: '20px', 
+  padding: '14px', 
+  border: '1px solid rgba(59,130,246,0.25)', 
+  boxShadow: '0 10px 30px rgba(15, 23, 42, 0.35)',
+  marginBottom: '20px'
+});
+
+const calendarDetailPanelStyle = (isMobile) => ({ 
+  background: 'linear-gradient(180deg, rgba(36,38,45,0.98), rgba(30,41,59,0.96))', 
+  borderRadius: '20px', 
+  padding: '20px', 
+  border: '1px solid rgba(59,130,246,0.25)', 
+  boxShadow: '0 10px 30px rgba(15, 23, 42, 0.28)' 
+});
 
 export default ScheduleView;
