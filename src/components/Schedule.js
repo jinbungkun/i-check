@@ -627,9 +627,6 @@ const WeeklyBoard = ({ days, getGroupedData, getDisplayDate, isMobile }) => {
             <div key={day} style={weeklyDayColHeader(day, colWidth, isMobile)}>
               <div style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: 800 }}>{day}</div>
               <div style={{ fontSize: '11px', opacity: 0.65, marginTop: '1px' }}>{date}</div>
-              {totalCount > 0 && (
-                <div style={weeklyDayCountBadge}>{totalCount}명</div>
-              )}
             </div>
           );
         })}
@@ -644,9 +641,6 @@ const WeeklyBoard = ({ days, getGroupedData, getDisplayDate, isMobile }) => {
             {/* 시간 라벨 + 해당 시간대 전체 인원수 */}
             <div style={weeklyTimeCell(timeColWidth)}>
               <div>{time}</div>
-              <div style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', backgroundColor: '#2a2d3a', padding: '1px 5px', borderRadius: '6px' }}>
-                {days.reduce((sum, d) => sum + (allGrouped[d][time]?.length || 0), 0)}명
-              </div>
             </div>
 
             {/* 각 요일의 해당 시간대 학생들 */}
