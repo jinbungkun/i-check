@@ -598,38 +598,103 @@ const DailyDashboard = ({ day, groupedData, isMobile, attendanceStatus, onCheckI
   </div>
 );
 
-const WeeklyBoard = ({ days, getGroupedData, getDisplayDate, isMobile }) => (
-  <div style={weeklyGridStyle(isMobile)}>
-    {days.map(day => {
-      const grouped = getGroupedData(day, false, 'weekly');
-      return (
-        <div key={day} style={weeklyColStyle(isMobile)}>
-          <div style={weeklyDayHeader(day)}>
-            <div style={{ fontSize: '15px', fontWeight: 'bold' }}>{day}</div>
-            <div style={{ fontSize: '11px', opacity: 0.6 }}>{getDisplayDate(day)}</div>
-          </div>
-          <div style={{ padding: '10px' }}>
-            {Object.keys(grouped).map(time => (
-              <div key={time} style={{ marginBottom: '12px' }}>
-                {/* 💡 시간과 인원수를 함께 표시 */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                  <div style={smallTimeLabel}>{time}</div>
-                  <div style={weeklyCountBadge}>{grouped[time].length}명</div>
-                </div>
-                
-                {grouped[time].map((s, i) => (
-                  <div key={i} style={s.isExtra ? weeklyExtraItem : weeklyNameItem}>
-                    {s.이름} {s.isExtra && `(${s.유형[0]})`}
-                  </div>
-                ))}
+const WeeklyBoard = ({ days, getGroupedData, getDisplayDate, isMobile }) => {
+  // 1. 모든 요일의 데이터를 한 번에 수집
+  const allGrouped = {};
+  days.forEach(day => {
+    allGrouped[day] = getGroupedData(day, false, 'weekly');
+  });
+
+  // 2. 모든 요일에 걸쳐 등장하는 시간대를 통합 & 정렬 → 고정 행으로 사용
+  const allTimes = Array.from(
+    new Set(days.flatMap(day => Object.keys(allGrouped[day])))
+  ).sort();
+
+  const colWidth = isMobile ? 120 : 150;
+  const timeColWidth = 58;
+
+  return (
+    <div style={{ width: '100%', overflowX: 'auto', paddingBottom: '8px' }}>
+      {/* ── 헤더 행: 빈 시간 칸 + 요일 칸들 ── */}
+      <div style={{ display: 'flex', minWidth: timeColWidth + colWidth * days.length }}>
+        {/* 시간 열 헤더 */}
+        <div style={weeklyTimeColHeader(timeColWidth)} />
+
+        {days.map(day => {
+          const date = getDisplayDate(day);
+          const totalCount = Object.values(allGrouped[day]).flat().length;
+          return (
+            <div key={day} style={weeklyDayColHeader(day, colWidth, isMobile)}>
+              <div style={{ fontSize: isMobile ? '14px' : '16px', fontWeight: 800 }}>{day}</div>
+              <div style={{ fontSize: '11px', opacity: 0.65, marginTop: '1px' }}>{date}</div>
+              {totalCount > 0 && (
+                <div style={weeklyDayCountBadge}>{totalCount}명</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── 시간대 행들 ── */}
+      {allTimes.length === 0 ? (
+        <div style={emptyState}>이번 주 수업이 없습니다.</div>
+      ) : (
+        allTimes.map(time => (
+          <div key={time} style={{ display: 'flex', minWidth: timeColWidth + colWidth * days.length, borderBottom: '1px solid #2a2d36' }}>
+            {/* 시간 라벨 + 해당 시간대 전체 인원수 */}
+            <div style={weeklyTimeCell(timeColWidth)}>
+              <div>{time}</div>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: '#94a3b8', backgroundColor: '#2a2d3a', padding: '1px 5px', borderRadius: '6px' }}>
+                {days.reduce((sum, d) => sum + (allGrouped[d][time]?.length || 0), 0)}명
               </div>
-            ))}
-          </div>
+            </div>
+
+            {/* 각 요일의 해당 시간대 학생들 */}
+            {days.map(day => {
+              const members = allGrouped[day][time] || [];
+              return (
+                <div key={day} style={weeklyDayCell(colWidth)}>
+  {members.length === 0 ? (
+    <div style={weeklyEmptyCell}>—</div>
+  ) : (
+    <>
+      <div style={weeklyTimeCountBadge}>
+        👥 {members.length}명
+      </div>
+
+      {members.map((s, i) => (
+        <div
+          key={i}
+          style={s.isExtra ? weeklyExtraChip : weeklyStudentChip}
+          title={s.isExtra ? `${s.이름} (${s.유형})` : s.이름}
+        >
+          <span
+            style={{
+              fontWeight: 700,
+              fontSize: isMobile ? '12px' : '13px'
+            }}
+          >
+            {s.이름}
+          </span>
+
+          {s.isExtra && (
+            <span style={weeklyExtraTag}>
+              {s.유형[0]}
+            </span>
+          )}
         </div>
-      );
-    })}
-  </div>
-);
+      ))}
+    </>
+  )}
+</div>
+              );
+            })}
+          </div>
+        ))
+      )}
+    </div>
+  );
+};
 
 const MonthlyBoard = ({ 
   selectedDate, 
@@ -737,14 +802,7 @@ const MonthlyBoard = ({
 );
 
 // --- 🎨 스타일 (기존 스타일 유지) ---
-const weeklyCountBadge = {
-  fontSize: '10px',
-  color: '#d8d8d8',
-  backgroundColor: '#333',
-  padding: '1px 5px',
-  borderRadius: '4px',
-  fontWeight: 'normal'
-};
+
 const timeCountStyle = {
   fontSize: '12px',
   color: '#d8d8d8',
@@ -755,7 +813,7 @@ const syncLabelStyle = { fontSize: '11px', color: '#3b82f6', fontWeight: 'bold',
 const addBtnStyle = { backgroundColor: '#3b82f6', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' };
 const extraCard = (isMobile) => ({ ...studentCard(isMobile), border: '1px dashed #8b5cf6', backgroundColor: '#2d2142' });
 const extraBadge = { fontSize: '10px', backgroundColor: '#8b5cf6', color: '#fff', padding: '1px 6px', borderRadius: '6px', position: 'absolute', top: '8px', left: '50%', transform: 'translateX(-50%)' };
-const weeklyExtraItem = { padding: '5px 8px', backgroundColor: '#2d2142', borderRadius: '6px', marginBottom: '4px', fontSize: '12px', color: '#a78bfa', border: '1px solid #8b5cf644' };
+
 const attendanceMessageStyle = {
   marginBottom: '16px',
   padding: '12px 16px',
@@ -827,12 +885,132 @@ const attendedTextStyle = {
   backgroundColor: 'rgba(59, 130, 246, 0.1)',
   border: '1px solid #3b82f6'
 };
-const weeklyGridStyle = (isMobile) => ({ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '10px' });
-const weeklyColStyle = (isMobile) => ({ flex: '0 0 140px', backgroundColor: '#24262d', borderRadius: '12px', border: '1px solid #333', minHeight: '400px' });
-const weeklyDayHeader = (day) => ({ padding: '10px', textAlign: 'center', backgroundColor: '#2d303a', borderBottom: '1px solid #333', borderRadius: '12px 12px 0 0' });
-const smallTimeLabel = { fontSize: '11px', color: '#3b82f6', fontWeight: 'bold' };
-const weeklyNameItem = { padding: '5px 8px', backgroundColor: '#1a1c23', borderRadius: '6px', marginBottom: '4px', fontSize: '12px', border: '1px solid #333' };
+
 const emptyState = { textAlign: 'center', padding: '40px', color: '#555', width: '100%' };
+
+// ── 주간 그리드 신규 스타일 ──
+const weeklyTimeColHeader = (w) => ({
+  width: w,
+  minWidth: w,
+  flexShrink: 0,
+  backgroundColor: '#1e2030',
+  borderRight: '1px solid #2a2d36',
+  borderBottom: '2px solid #3b82f6',
+});
+
+const weeklyDayColHeader = (day, w, isMobile) => ({
+  flex: `0 0 ${w}px`,
+  minWidth: w,
+  padding: isMobile ? '10px 6px' : '12px 8px',
+  textAlign: 'center',
+  backgroundColor: '#24262d',
+  borderRight: '1px solid #2a2d36',
+  borderBottom: '2px solid #3b82f6',
+  color: '#f8fafc',
+  position: 'relative',
+});
+
+const weeklyDayCountBadge = {
+  position: 'absolute',
+  top: '6px',
+  right: '6px',
+  fontSize: '10px',
+  backgroundColor: '#3b82f6',
+  color: '#fff',
+  padding: '1px 5px',
+  borderRadius: '8px',
+  fontWeight: 700,
+};
+
+const weeklyTimeCell = (w) => ({
+  width: w,
+  minWidth: w,
+  flexShrink: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '10px 4px',
+  fontSize: '12px',
+  fontWeight: 700,
+  color: '#3b82f6',
+  backgroundColor: '#1e2030',
+  borderRight: '1px solid #2a2d36',
+  gap: '4px',
+});
+
+
+
+const weeklyDayCell = (w) => ({
+  flex: `0 0 ${w}px`,
+  minWidth: w,
+  padding: '8px 6px',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '5px',
+  borderRight: '1px solid #2a2d36',
+  minHeight: '56px',
+  justifyContent: 'flex-start',
+  alignItems: 'stretch',
+});
+
+const weeklyEmptyCell = {
+  textAlign: 'center',
+  color: '#3a3d4a',
+  fontSize: '14px',
+};
+
+const weeklyStudentChip = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '4px',
+  padding: '5px 8px',
+  borderRadius: '8px',
+  backgroundColor: '#2d303a',
+  border: '1px solid #3d414d',
+  color: '#f1f5f9',
+  fontSize: '13px',
+  textAlign: 'center',
+};
+
+const weeklyExtraChip = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '4px',
+  padding: '5px 8px',
+  borderRadius: '8px',
+  backgroundColor: '#2d2142',
+  border: '1px dashed #8b5cf6',
+  color: '#c4b5fd',
+  fontSize: '13px',
+  textAlign: 'center',
+};
+
+const weeklyExtraTag = {
+  fontSize: '10px',
+  backgroundColor: '#7c3aed',
+  color: '#fff',
+  padding: '1px 4px',
+  borderRadius: '4px',
+  fontWeight: 700,
+  flexShrink: 0,
+};
+
+const weeklyTimeCountBadge = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '5px 8px',
+  borderRadius: '8px',
+  backgroundColor: '#172554',
+  border: '1px solid #3b82f6',
+  color: '#bfdbfe',
+  fontSize: '13px',
+  fontWeight: 700,
+  textAlign: 'center',
+};
 
 const calendarCardStyle = (isMobile) => ({ 
   background: 'linear-gradient(180deg, rgba(36,38,45,0.98), rgba(31,41,55,0.95))', 
