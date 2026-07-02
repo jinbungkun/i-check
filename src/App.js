@@ -9,6 +9,7 @@ import Register from './components/Register';
 import Setting from './components/Setting';
 import Birthday from './components/Birthday';
 import Report from './components/Report';
+import StaffStatusBoard from './components/StaffStatusBoard';
 // 유틸리티 및 테마
 import { requestGAS } from './utils/GoogleAppScript';
 import { filterEssentialData } from './utils/DataHelper';
@@ -54,7 +55,7 @@ function App() {
     return localStorage.getItem('attendance_mode') === 'true';
   });
 
-  const menuCategories = ['출석','생일','조회', '스케쥴', '포인트', '등록', '랭킹', '성적표', '설정'];
+  const menuCategories = ['출석','생일','조회', '스케쥴', '포인트', '등록', '랭킹', '성적표', '인원현황', '설정'];
 
   // 📦 메모이제이션: sharedProps 객체 캐시
   const sharedProps = useMemo(() => ({ 
@@ -72,8 +73,9 @@ function App() {
     '포인트': <Points {...sharedProps} />,
     '랭킹': <Ranking />,
     '등록': <Register {...sharedProps} />,
-    '성적표': <Report {...sharedProps} />,  
-    '설정': <Setting 
+    '성적표': <Report {...sharedProps} />,
+        '인원현황': <StaffStatusBoard {...sharedProps} />,
+        '설정': <Setting 
       isAttendanceMode={isAttendanceMode} 
       setIsAttendanceMode={setIsAttendanceMode} 
     />

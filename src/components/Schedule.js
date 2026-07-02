@@ -699,9 +699,7 @@ const MonthlyBoard = ({
   groupedData, 
   isLoading, 
   isMobile, 
-  dayName,
-  attendanceStatus,
-  onCheckIn
+  dayName
 }) => (
   <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
     <div style={infoBarStyle(isMobile)}>
@@ -737,8 +735,6 @@ const MonthlyBoard = ({
         <span style={countTagStyle}>총 {Object.values(groupedData).flat().length}명</span>
       </div>
 
-      {attendanceStatus ? <div style={attendanceMessageStyle}>{attendanceStatus}</div> : null}
-
       {isLoading ? (
         <div style={emptyState}>일정을 불러오는 중입니다...</div>
       ) : Object.keys(groupedData).length > 0 ? Object.entries(groupedData).map(([time, members]) => (
@@ -751,40 +747,15 @@ const MonthlyBoard = ({
           <div style={cardGridStyle(isMobile)}>
             {members.map((s, i) => {
               const isExtraClass = s.isExtra;
-              const cardStyle = isExtraClass ? extraCard(isMobile) : (s.isAttended ? attendedCard(isMobile) : studentCard(isMobile));
-              const badgeText = isExtraClass ? s.유형 : (s.isAttended ? '출석' : '미출석');
-              const badgeStyle = isExtraClass ? extraBadge : (s.isAttended ? attendBadge : waitBadge);
+              const cardStyle = isExtraClass ? extraCard(isMobile) : studentCard(isMobile);
+              const badgeText = isExtraClass ? s.유형 : '정규';
+              const badgeStyle = isExtraClass ? extraBadge : waitBadge;
 
               return (
                 <div key={i} style={cardStyle}>
                   <div style={badgeStyle}>{badgeText}</div>
                   <div style={nameStyle(isMobile)}>{s.이름 || s.name || '이름 없음'}</div>
-                  <div style={{ marginTop: 'auto', width: '100%' }}>
-                    {s.isAttended ? (
-                      s.isExtra ? (
-                        <button style={disabledButtonStyle} disabled>✓ 출석</button>
-                      ) : (
-                        <div style={attendedTextStyle}>✓ 출석</div>
-                      )
-                    ) : (
-                      !s.isExtra || s.유형 === '보강' ? (
-                        <button 
-                          style={checkInButtonStyle} 
-                          onClick={() => onCheckIn(s)} 
-                          onMouseEnter={(e) => {
-                            e.target.style.transform = 'scale(1.05)'; 
-                            e.target.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.4)';
-                          }} 
-                          onMouseLeave={(e) => {
-                            e.target.style.transform = 'scale(1)'; 
-                            e.target.style.boxShadow = 'none';
-                          }}
-                        >
-                          ✓ 출석
-                        </button>
-                      ) : null
-                    )}
-                  </div>
+                  {/* 💡 출석 관련 버튼 및 UI 제거됨 */}
                 </div>
               );
             })}
