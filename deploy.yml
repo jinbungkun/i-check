@@ -1,0 +1,29 @@
+name: Auto Deploy
+
+# 기존 push 설정을 삭제하거나 주석 처리하고, workflow_dispatch를 추가합니다.
+on:
+  workflow_dispatch: # 수동 실행을 가능하게 하는 옵션
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install and Build
+        run: |
+          npm install
+          CI=false npm run build
+
+      - name: Deploy
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: build
+          branch: gh-pages
