@@ -60,7 +60,7 @@ export const requestGAS = async (params = {}) => {
       response = await fetch(baseUrl, {
         method: 'POST',
         redirect: 'follow',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(data)
       });
     } else {
