@@ -16,6 +16,11 @@ const CORE_FIELD_NAMES = Object.keys(BASIC_FIELDS);
 
 const normalizeKey = (value) => String(value || '').replace(/\s+/g, '').toLowerCase();
 
+// BASIC_FIELDS의 모든 후보 키를 정규화한 집합 — extra 루프에서 이 필드들을 덮어쓰지 않도록 방지
+const BASIC_FIELD_NORMALIZED_KEYS = new Set(
+  Object.values(BASIC_FIELDS).flat().map(k => normalizeKey(k))
+);
+
 const forceExtractDate = (val) => {
   if (!val) return '';
   const str = String(val);
@@ -114,6 +119,9 @@ export const normalizeStudent = (student) => {
   Object.keys(student).forEach((key) => {
     if (CORE_FIELD_NAMES.includes(key)) return;
     if (key === 'extra') return;
+    // 공백 포함 키(예: '마지막 출석일')가 BASIC_FIELDS 후보와 일치하면 스킵
+    // — 이미 BASIC_FIELDS 처리에서 올바른 값을 설정했으므로 OLD 값으로 덮어쓰는 것을 방지
+    if (BASIC_FIELD_NORMALIZED_KEYS.has(normalizeKey(key))) return;
 
     const value = normalizeValue(student[key]);
     const normalizedKey = key.replace(/\s+/g, '');
